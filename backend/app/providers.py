@@ -11,6 +11,7 @@ import httpx
 from dotenv import dotenv_values, load_dotenv, set_key
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PROVIDER_ID = "wanjie_ark"
 
 
 class LLMProvider(Protocol):
@@ -167,10 +168,13 @@ def _active_provider_id(values: dict[str, str]) -> str:
     selected = _env_value("LLM_PROVIDER", values, "")
     if selected in PROVIDER_SPEC_BY_ID:
         return selected
+    default_spec = PROVIDER_SPEC_BY_ID[DEFAULT_PROVIDER_ID]
+    if _first_env((default_spec.api_key_env, *default_spec.api_key_aliases), values):
+        return default_spec.id
     for spec in PROVIDER_SPECS:
         if _first_env((spec.api_key_env, *spec.api_key_aliases), values):
             return spec.id
-    return "deepseek"
+    return DEFAULT_PROVIDER_ID
 
 
 def _env_file() -> Path:

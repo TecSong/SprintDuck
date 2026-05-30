@@ -22,7 +22,7 @@ export function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [config, setConfig] = useState<LLMConfigResponse | null>(null);
-  const [selectedProviderId, setSelectedProviderId] = useState("deepseek");
+  const [selectedProviderId, setSelectedProviderId] = useState("wanjie_ark");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -59,7 +59,7 @@ export function App() {
   const syncConfigForm = (nextConfig: LLMConfigResponse, providerId: string) => {
     const provider = nextConfig.providers.find((item) => item.id === providerId) ?? nextConfig.providers[0];
     setConfig(nextConfig);
-    setSelectedProviderId(provider?.id ?? "deepseek");
+    setSelectedProviderId(provider?.id ?? "wanjie_ark");
     setModel(provider?.model ?? "");
     setBaseUrl(provider?.base_url ?? "");
     setApiKey("");
