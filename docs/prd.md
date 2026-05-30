@@ -1,74 +1,374 @@
 # SprintDuckAgent PRD
 
-## Problem Statement
+## 产品定位
 
-求职者准备面试时常常不知道自己和目标岗位的真实差距在哪里，也很难把有限时间转成清晰、可执行的冲刺计划。通用聊天机器人可以给建议，但经常泛泛而谈，缺少对简历和 JD 的证据引用，用户无法判断哪些建议可信、哪些只是模型猜测。
+SprintDuckAgent 是一个面向国内求职者的、隐私优先的求职工作台 Agent。
 
-用户需要一个开源、可本地运行、默认不长期保存隐私材料的求职冲刺 Agent：它能通过对话收集材料，用证据解释差距，并把差距转成接下来几天最该做的任务。
+它不再只是面试冲刺教练，而是帮助用户覆盖完整求职链路：
 
-## Solution
+1. 建立和优化简历材料。
+2. 发现、导入和评估目标岗位。
+3. 做公司和岗位背调。
+4. 准备投递材料、招聘者沟通话术和内推请求。
+5. 准备面试，并保留现有证据化面试冲刺能力。
+6. 跟踪多个机会的进度和下一步动作。
+7. 准备面试复盘、跟进消息和 Offer 谈判。
 
-SprintDuckAgent 提供一个中文优先的本地 Web 工作台。用户和 Agent 对话，上传或粘贴文本类简历/JD，补充关键日期、每日可投入时间、当前求职阶段。Agent 从 JD 推断岗位模板，在必要时追问确认，然后输出：
+核心隐私承诺不是“数据永不离开本地”。一旦用户接入第三方大模型、搜索服务或招聘平台连接器，这个说法就不成立。更准确的承诺是：
 
-- 准备度分数、准备度区间、证据覆盖率
-- 证据化 Top Gaps
-- 1-7 天自适应冲刺计划
-- 高频面试追问
-- 可下载 Markdown 报告
+> SprintDuckAgent 默认在本地保存求职材料，不上传到 SprintDuck 自有服务器。使用第三方模型、搜索工具或招聘平台连接器时，产品必须向用户说明会发送什么数据、发送给谁、用于什么任务，并让用户显式授权。
 
-第一版不做商业化与持久化，只保证核心求职诊断闭环可信、可演示、可扩展。
+## 问题陈述
 
-## User Stories
+国内求职者的求职过程通常分散在简历文档、聊天记录、招聘平台、公司官网、表格和个人记忆里。通用 AI 聊天工具可以改简历或生成面试建议，但常见问题是：
 
-1. As a candidate, I want to paste my resume and JD into a chat, so that I can get started without learning a complex tool.
-2. As a candidate, I want to upload `.txt` or `.md` resume/JD files, so that I do not need to manually reformat text.
-3. As a candidate, I want the agent to ask for missing timing constraints, so that the sprint plan fits my real deadline.
-4. As a candidate, I want the agent to infer whether the role is engineering, product, or operations, so that the diagnosis uses relevant criteria.
-5. As a candidate, I want the agent to ask for confirmation when the role is ambiguous, so that the report is not built on the wrong template.
-6. As a candidate, I want every major gap to cite resume/JD evidence, so that I can trust the diagnosis.
-7. As a candidate, I want missing evidence to be labeled as missing evidence, so that the system does not accuse me of lacking a skill I may simply not have written down.
-8. As a candidate, I want a readiness score and band, so that I can quickly understand my current preparation level.
-9. As a candidate, I want the score to be explained as material readiness, not offer probability, so that I do not overinterpret it.
-10. As a candidate, I want a 1-7 day plan based on my deadline, so that I can act immediately.
-11. As a candidate, I want each plan item to connect back to a gap, so that I know why I am doing it.
-12. As a candidate, I want likely interview follow-up questions, so that I can rehearse the areas most likely to be challenged.
-13. As a candidate, I want to download the final report as Markdown, so that I can keep or edit it locally.
-14. As an open-source user, I want the app to run locally, so that my job-search documents do not need to be stored by a hosted service.
-15. As a developer, I want provider interfaces around LLM calls, so that DeepSeek can be replaced later.
-16. As a developer, I want a harness interface for future tools and skills, so that the agent can later call interview question banks, resume parsers, or company research tools.
-17. As a maintainer, I want fake-provider tests around the public agent behavior, so that the core contract is stable without paying for every test run.
-18. As a maintainer, I want real model conversation cases, so that the demo is validated against actual LLM behavior.
+- 没有稳定的求职工作台，无法围绕候选人资料和目标岗位持续组织上下文。
+- 建议缺少对简历、JD、公司信息和求职阶段的证据引用。
+- 对简历、薪资、求职意向等敏感信息的数据外发边界不清楚。
+- 在发送消息、投递简历、共享材料之前缺少 human-in-the-loop 控制。
+- 对国内求职习惯支持不足，例如中文简历、Boss 直聘、脉脉、招聘者聊天、Offer 谈判语境。
 
-## Implementation Decisions
+用户需要一个 Agent 工作台，能在求职链路的每一步提供帮助，同时让数据流向可见、可控、可拒绝。
 
-- The app is a new FastAPI + React/Vite project, independent of previous SprintDuck code.
-- The backend owns session state, role inference, report generation, Markdown rendering, provider calls, and harness interfaces.
-- The frontend owns chat composition, SSE rendering, report visualization, file text upload, and Markdown download.
-- Sessions are memory-only in Phase 1. Refreshing or restarting the server loses session state.
-- Accepted files are text-like only: `.txt`, `.md`, `.markdown`.
-- The default role presets are engineering, product, and operations. A generic role exists only as fallback after ambiguity.
-- The agent may ask at most two missing-information follow-up rounds before producing a low-confidence report.
-- The report must always distinguish evidence found from evidence not found.
-- The API uses SSE for chat responses because the product is an agent, but final reports are still structured objects.
-- DeepSeek `deepseek-v4-flash` is the default model. Provider and model are configurable via environment variables.
-- Harness design is included now, but Phase 1 tools/skills are architecture stubs, not full external integrations.
+## 产品原则
 
-## Testing Decisions
+- 隐私优先指“用户可控的数据外发”，不是绝对本地。
+- 默认本地存储。未来如果提供云同步，必须是可选能力。
+- 每一次外部调用都必须展示调用目的、目标服务和数据范围。
+- Agent 必须区分“已有证据”和“缺失证据”，不能把缺失材料直接判断成能力缺失。
+- Agent 可以建议动作，但高影响动作必须由用户确认。
+- 平台自动化必须保守、可审计、限速，并且不能隐藏执行。
+- 产品形态应是专业工作台，不是营销落地页。
 
-- Tests verify behavior through public service/API interfaces rather than prompt implementation details.
-- Fake provider tests cover the agent state machine, role inference, missing-info follow-ups, report contract, Markdown rendering, and SSE event shape.
-- Real provider tests are opt-in and use synthetic public samples for engineering, product, and operations.
-- Real tests pass when the final report has required structure, evidence references or explicit missing-evidence labels, a valid adaptive plan, and role-relevant interview questions.
-- Web smoke verification checks that backend and frontend can start locally and the main workbench loads.
+## 目标用户
 
-## Out of Scope
+- 主要通过 Boss 直聘、脉脉、公司招聘页、内推和招聘者私聊找工作的国内候选人。
+- 已有简历，但需要按 JD 优化简历、准备面试的候选人。
+- 正在比较多个机会、公司、团队和薪酬包的有经验求职者。
+- 需要判断转岗可行性、补齐材料和准备故事库的转型候选人。
+- 希望本地运行、自己配置模型服务商 API Key 的开源用户。
 
-- Payment, pricing, waitlist, earlybird, lead capture, or conversion analytics.
-- Account system, persistent database, historical reports, reminder jobs, or daily task completion.
-- PDF/image parsing, OCR, or cloud storage.
-- Full mock interview, voice, video, or resume rewriting.
-- Hosted deployment and CI/CD.
+## 隐私模型
 
-## Further Notes
+### 隐私承诺
 
-Open-source positioning should be visible in README and product copy: local-first, privacy-aware, evidence-backed, and hackable. The UI should feel like a professional workbench, not a marketing landing page.
+- 简历、JD、笔记、报告和求职 pipeline 数据默认保存在本地。
+- 本地工作台不要求用户注册托管账号。
+- API Key 保存在用户机器上，返回到浏览器时只能展示 masked 状态。
+- 第三方大模型调用必须由用户配置和授权。
+- 招聘平台连接器默认关闭，启用时必须显式授权。
+- 报告必须标明哪些结论基于证据，哪些结论只是低置信度推断。
+
+### 数据外发控制
+
+任何数据离开本地工作台前，界面必须展示：
+
+- 目标服务：模型服务商、搜索服务、MCP server 或招聘平台。
+- 调用目的：简历改写、JD 分析、公司背调、消息生成、投递动作等。
+- 数据范围：完整简历、简历片段、JD 文本、公司名、聊天草稿、平台凭证或元数据。
+- 留存提示：SprintDuckAgent 无法替第三方服务承诺其数据留存策略。
+- 用户动作：仅本次允许、本会话允许、拒绝、或编辑即将发送的 payload。
+
+### 脱敏和最小化
+
+默认外部调用应发送完成任务所需的最小数据：
+
+- 默认脱敏手机号、邮箱、微信、地址、身份证号等直接身份信息。
+- 在任务允许时，让用户可选脱敏公司名、学校名、薪资、项目名。
+- 分析局部问题时优先发送相关片段，而不是整份简历或完整历史。
+- 保留本地可查看的外部调用审计日志，记录 payload 摘要、目标服务、时间和授权方式。
+
+### 纯本地模式
+
+产品应支持纯本地模式：
+
+- 不调用外部大模型。
+- 不使用联网搜索。
+- 不启用招聘平台连接器。
+- 只使用确定性的本地工具和用户手动提供的上下文。
+
+纯本地模式的效果可以更弱，但它给隐私敏感用户一个严格选项。
+
+## 求职场景
+
+### 1. 候选人档案和基础简历
+
+用户导入或粘贴简历、项目经历、教育背景、技能、目标城市、目标薪资和岗位偏好。Agent 在本地建立候选人档案，并维护证据片段和缺失信息列表。
+
+输出：
+
+- 结构化候选人档案。
+- 简历证据地图。
+- 缺失证据清单。
+- 基础简历改进建议。
+
+### 2. JD 导入和匹配分析
+
+用户粘贴 JD、上传文本文件，或未来通过连接器导入岗位。Agent 提取岗位类型、级别、硬性要求、加分项、面试信号和风险点。
+
+输出：
+
+- 匹配分和解释。
+- 与简历证据的匹配结果。
+- 差距和补齐动作。
+- 建议投递、收藏、降优先级或进一步背调。
+
+### 3. 简历优化
+
+用户要求全局优化简历，或针对某个 JD 定制简历。Agent 必须保持事实约束，并说明每条改写建议来自哪些证据。
+
+输出：
+
+- 简历诊断。
+- JD 定制改写建议。
+- bullet 前后对比。
+- 需要用户确认真实性的表述。
+- 可导出的 Markdown 或文档内容。
+
+### 4. 公司和岗位背调
+
+用户希望了解公司背景、业务模式、团队情况、产品状态、近期动态、面试风险和岗位质量。Agent 应优先使用公开来源，并在可用时展示来源。
+
+输出：
+
+- 公司简报。
+- 岗位和团队风险清单。
+- 面试准备角度。
+- 候选人应向招聘者或面试官追问的问题。
+- 仍需人工确认的未知信息。
+
+### 5. 投递准备
+
+用户准备招聘者开场白、内推请求、申请表回答和自我介绍。Agent 生成中文优先、简洁可信、贴合候选人证据和岗位上下文的话术。
+
+输出：
+
+- 招聘者开场白。
+- 跟进消息。
+- 内推请求。
+- 简短自我介绍。
+- 申请表回答。
+
+### 6. 简历投递和平台流程
+
+产品未来可以帮助用户连接 Boss 直聘、脉脉等国内招聘平台，但这部分必须分阶段推进。
+
+MVP 行为：
+
+- 只做手动流程辅助。
+- 用户手动粘贴 JD 或导入文本。
+- Agent 生成投递策略和沟通话术。
+- 用户自己在平台完成投递和发送。
+
+后续连接器行为：
+
+- 用户授权后读取岗位信息。
+- 检测重复岗位，避免重复投递。
+- 生成消息并提供最终预览。
+- 发送消息或投递简历前必须再次确认。
+- 保留平台级限速和动作日志。
+
+自动投递不是 MVP 要求。它是高风险连接器能力，需要单独设计、测试和合规评估。
+
+### 7. 面试准备
+
+保留现有 SprintDuckAgent 的核心能力。Agent 使用简历、JD、公司上下文、面试日期、每日可投入时间和当前面试阶段，生成证据化准备度报告和 1-7 天冲刺计划。
+
+输出：
+
+- 准备度分数和区间。
+- 证据覆盖率。
+- Top gaps。
+- 自适应冲刺计划。
+- 高频面试追问。
+- STAR 故事库建议。
+
+### 8. 面试复盘和跟进
+
+面试后，用户记录被问到的问题、回答薄弱点、面试官信号和下一步。Agent 生成复盘、跟进消息，并调整后续轮次准备计划。
+
+输出：
+
+- 面试复盘。
+- 跟进邮件或聊天消息。
+- 更新后的风险和 gap 列表。
+- 下一轮准备计划。
+
+### 9. Offer 谈判
+
+用户拿到口头或书面 Offer 后，Agent 帮助分析薪资结构、约束、备选项、谈判策略和风险。
+
+输出：
+
+- Offer 对比表。
+- 谈判目标和底线。
+- 招聘者沟通脚本。
+- 试用期、title、base、bonus、期权、城市、工作强度、入职时间等风险提示。
+
+### 10. 求职 Pipeline 跟踪
+
+用户需要本地视图管理多个机会的进展。
+
+输出：
+
+- 岗位 pipeline：已收藏、已投递、筛选中、面试中、Offer、已拒绝、已归档。
+- 下一步动作和截止日期。
+- 每个机会关联的笔记、文件、消息和报告。
+- 本地导出和备份。
+
+## 基础工具
+
+工具是 Agent 可调用的确定性能力或边界清晰的外部能力。尽量保证核心工具可以在没有真实外部服务的情况下测试。
+
+### 本地工具
+
+- `profile.parse`：把简历和个人材料解析成结构化候选人事实。
+- `pii.redact`：脱敏直接身份信息和用户配置的敏感字段。
+- `jd.parse`：提取岗位、级别、要求、职责、地点、薪资线索和面试信号。
+- `evidence.extract`：把简历证据映射到 JD 要求。
+- `fit.score`：生成可解释的匹配分和置信度。
+- `resume.rewrite`：基于证据生成事实约束下的改写候选。
+- `report.render`：渲染 Markdown，后续支持文档格式。
+- `pipeline.store`：本地保存岗位、阶段、笔记和动作。
+- `audit.log`：记录外部调用、连接器动作和用户授权。
+- `consent.check`：判断某个任务是否允许调用模型、MCP 或平台连接器。
+
+### 外部工具
+
+- `llm.generate`：在用户授权和 payload 可检查的前提下调用配置的大模型。
+- `web.search`：搜索公开公司和岗位上下文。
+- `web.fetch`：抓取公开页面用于背调。
+- `salary.lookup`：在可用时查询或导入薪酬参考数据。
+- `document.parse`：解析 PDF、DOCX、Markdown 和纯文本简历。
+- `calendar.read`：可选读取面试时间和提醒。
+
+### 平台连接器工具
+
+这些能力默认关闭，必须放在明确的连接器设置之后：
+
+- `job_platform.auth`：在本地管理用户授权的平台会话。
+- `job_platform.import_job`：导入 JD、公司、招聘者和岗位元数据。
+- `job_platform.search_jobs`：按用户给定条件搜索岗位。
+- `job_platform.draft_message`：基于本地上下文生成招聘者消息。
+- `job_platform.submit_application`：只有在用户最终确认后才投递或发送。
+- `job_platform.action_log`：记录读取、生成、发送和投递动作。
+
+## 内置 Skills
+
+Skills 是更高层的 Agent 行为，由工具、prompt、策略和 UI 流程组合而成。
+
+- `privacy_intake`：解释隐私模式，收集授权偏好，配置脱敏策略。
+- `candidate_profile_builder`：建立和维护本地候选人档案。
+- `resume_optimizer`：在事实约束下诊断和改写简历。
+- `jd_match_analyst`：解析 JD，对比简历证据，并建议投递优先级。
+- `company_researcher`：收集公开公司信息、风险和面试准备角度。
+- `application_assistant`：生成招聘者消息、内推请求和申请表回答。
+- `platform_application_operator`：在严格用户确认下操作平台连接器。
+- `interview_sprint_coach`：生成证据化面试准备度报告和冲刺计划。
+- `mock_interview_coach`：围绕岗位和 gap 做结构化模拟面试。
+- `interview_debrief_assistant`：把面试记录转成复盘、跟进和下一轮计划。
+- `offer_negotiation_coach`：比较 Offer，并准备谈判脚本。
+- `pipeline_manager`：跟踪机会、下一步动作、截止日期和本地导出。
+
+## MCP 需求
+
+MCP server 应被视为带权限边界的能力提供方。安装了 MCP 不等于默认可信。
+
+推荐 MCP 类别：
+
+- 本地 filesystem MCP：限制在 SprintDuck 工作区内读写简历、报告和导出文件。
+- 文档 MCP：解析和生成 PDF、DOCX、Markdown、表格等材料。
+- 浏览器自动化 MCP：在用户授权后，受控操作招聘网站。
+- 搜索和研究 MCP：用于公司背调，并返回来源 URL。
+- 日历 MCP：读取面试安排和提醒。
+- 邮件或消息 MCP：用于生成跟进草稿，早期版本优先 draft-only。
+- 本地数据库或向量存储 MCP：保存候选人档案、证据和 pipeline 记忆。
+- 招聘平台 MCP：Boss 直聘、脉脉，以及后续能安全实现的平台。
+
+MCP 约束：
+
+- 每个 MCP 必须声明可读取数据、可写入数据、外部目标和高影响动作。
+- 优先使用只读 MCP，再引入可写 MCP。
+- 发送、投递、删除、改写线上资料等动作必须最终确认。
+- MCP 输出如果影响判断，必须被引用或标记为未验证。
+- 用户关闭任意 MCP 后，本地核心流程仍应可用。
+
+## 用户故事
+
+1. 作为候选人，我希望只导入一次简历，后续任务都能复用同一套证据。
+2. 作为候选人，我希望在调用大模型前知道将发送哪些数据。
+3. 作为候选人，我希望默认脱敏身份信息，以降低使用外部模型的隐私风险。
+4. 作为候选人，我希望粘贴 JD 后得到匹配分析，以判断是否值得投递。
+5. 作为候选人，我希望简历改写建议来自真实经历，而不是凭空编造。
+6. 作为候选人，我希望公司背调有来源，方便准备面试并规避风险。
+7. 作为候选人，我希望 Agent 帮我生成中文招聘者消息，提升投递效率。
+8. 作为候选人，我希望现有面试冲刺报告继续可用，帮助我准备近期面试。
+9. 作为候选人，我希望跟踪每个机会的阶段和下一步动作，不再散落在聊天记录里。
+10. 作为候选人，我希望有 Offer 谈判脚本，让我在压力下专业回应。
+11. 作为隐私敏感用户，我希望有纯本地模式，在不外发数据的前提下使用基础能力。
+12. 作为维护者，我希望工具、skills 和 MCP 连接器有稳定接口，方便渐进式加入高风险平台能力。
+
+## MVP 范围
+
+第一版升级后的 MVP 应聚焦高价值本地工作台，避免一开始做高风险自动化：
+
+- 隐私模式选择：纯本地、外部模型加脱敏、外部模型完整上下文。
+- 候选人档案和简历证据地图。
+- JD 导入和匹配分析。
+- 带证据引用的简历优化建议。
+- 基于用户提供上下文和可选公开搜索的公司背调简报。
+- 保留现有面试准备度报告和 1-7 天冲刺计划。
+- 投递消息生成。
+- 本地 pipeline 跟踪。
+- 报告和消息的 Markdown 导出。
+- 外部调用审计日志。
+
+## Post-MVP 范围
+
+- DOCX/PDF 简历解析和导出。
+- Boss 直聘、脉脉的浏览器辅助导入。
+- draft-only 招聘者聊天集成。
+- 日历和邮件集成，用于面试提醒和跟进。
+- 本地加密数据库和备份恢复。
+- 可选云同步。
+- 用户确认后的平台投递。
+- 多轮模拟面试。
+- 薪酬参考数据集成。
+
+## MVP 不做
+
+- 全自动批量投递。
+- 托管账号系统。
+- 付费、定价、等待名单、线索收集或转化分析。
+- 云端保存简历或平台凭证。
+- 替第三方模型承诺其数据留存行为。
+- 绕过招聘平台反自动化限制。
+- 未经最终确认直接发送招聘者消息。
+
+## 关键风险
+
+- 隐私过度承诺：外部模型或连接器存在时，不能说“数据永不离开本地”。
+- 平台合规：招聘网站可能限制自动化，也可能频繁改变页面流程。
+- 账号安全：连接器错误可能影响用户账号或招聘者关系。
+- 简历幻觉：改写功能如果不强制证据约束，可能编造经历。
+- 低质量批量投递：自动化如果不筛选、不人工确认，可能伤害候选人结果。
+- 数据敏感性：简历包含身份、薪资、雇主、离职和求职意向等敏感信息。
+
+## 成功指标
+
+MVP 应优先衡量任务完成和信任，而不是自动化数量：
+
+- 用户能在同一个本地工作台完成简历导入、JD 匹配、简历优化、面试计划和投递消息生成。
+- 报告和改写建议能引用简历、JD、公司信息证据，或明确标注缺失证据。
+- 用户能在模型调用前检查并批准外发 payload。
+- 纯本地模式对基础解析、跟踪和确定性报告仍然可用。
+- 任何高影响连接器动作都不能在没有用户确认的情况下执行。
+- Pipeline 跟踪能减少遗漏下一步动作的情况。
+
+## 实现备注
+
+- 当前 FastAPI + React 工作台可以演进成本地求职 workspace shell。
+- 现有面试冲刺报告应变成更大求职 Agent 中的一个 skill。
+- 当前 harness 应从简单本地工具扩展为带权限控制的 tools、skills 和 MCP adapters。
+- 原 demo 的内存会话足够，但 pipeline 跟踪需要本地持久化。
+- 测试应覆盖隐私门禁、payload 脱敏、证据约束改写，以及连接器高影响动作前的人工确认。
