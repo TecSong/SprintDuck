@@ -8,8 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from .agent import SprintDuckAgent
-from .models import CreateSessionResponse, HealthResponse, SessionState, SseEvent
-from .providers import DeepSeekProvider
+from .models import (
+    CreateSessionResponse,
+    HealthResponse,
+    LLMConfigResponse,
+    SessionState,
+    SseEvent,
+    UpdateLLMConfigRequest,
+)
+from .providers import build_provider_from_env, llm_config_payload, save_llm_config
 from .session_store import InMemorySessionStore
 
 app = FastAPI(title="SprintDuckAgent API")
@@ -22,12 +29,27 @@ app.add_middleware(
 )
 
 store = InMemorySessionStore()
-agent = SprintDuckAgent(provider=DeepSeekProvider())
+agent = SprintDuckAgent(provider=build_provider_from_env())
 
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(ok=True, service="sprintduck-agent")
+
+
+@app.get("/api/llm/config", response_model=LLMConfigResponse)
+async def get_llm_config() -> dict[str, object]:
+    return llm_config_payload()
+
+
+@app.put("/api/llm/config", response_model=LLMConfigResponse)
+async def update_llm_config(payload: UpdateLLMConfigRequest) -> dict[str, object]:
+    try:
+        config = save_llm_config(payload.provider, payload.api_key, payload.model, payload.base_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    agent.provider = build_provider_from_env()
+    return config
 
 
 @app.post("/api/chat/sessions", response_model=CreateSessionResponse)

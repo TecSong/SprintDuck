@@ -4,10 +4,19 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
-from app.main import app
+from app.main import agent, app
+from app.providers import FakeLLMProvider
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(autouse=True)
+def reset_agent_provider():
+    agent.provider = FakeLLMProvider()
+    yield
+    agent.provider = FakeLLMProvider()
 
 
 def parse_sse(raw: str):
@@ -156,3 +165,43 @@ async def test_chat_api_resume_upload_does_not_satisfy_constraints():
         assert "关键日期" in state["missing"]
         assert "每天可投入时间" in state["missing"]
         assert "当前求职阶段" in state["missing"]
+
+
+async def test_llm_config_api_writes_wanjie_ark_env_without_returning_secret(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    monkeypatch.setenv("SPRINTDUCK_ENV_FILE", str(env_file))
+    for key in (
+        "LLM_PROVIDER",
+        "WANJIE_ARK_API_KEY",
+        "WANJIE_ARK_MODEL",
+        "WANJIE_ARK_BASE_URL",
+        "WJARK_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    secret = "test-wanjie-ark-secret"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.put(
+            "/api/llm/config",
+            json={
+                "provider": "wanjie_ark",
+                "api_key": secret,
+                "model": "deepseek-reasoner",
+                "base_url": "https://maas-openapi.wanjiedata.com/api",
+            },
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        payload = json.dumps(data, ensure_ascii=False)
+        provider = next(item for item in data["providers"] if item["id"] == "wanjie_ark")
+        assert data["active_provider"] == "wanjie_ark"
+        assert provider["configured"] is True
+        assert provider["model"] == "deepseek-reasoner"
+        assert provider["base_url"] == "https://maas-openapi.wanjiedata.com/api"
+        assert secret not in payload
+
+    env_text = env_file.read_text()
+    assert "LLM_PROVIDER=wanjie_ark" in env_text
+    assert f"WANJIE_ARK_API_KEY={secret}" in env_text

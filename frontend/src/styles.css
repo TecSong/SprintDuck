@@ -16,6 +16,8 @@ body {
 }
 
 button,
+input,
+select,
 textarea {
   font: inherit;
 }
@@ -49,6 +51,140 @@ textarea {
 .privacy-note {
   color: #66717f;
   font-size: 13px;
+}
+
+.settings-panel {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(520px, 2fr) minmax(160px, 0.6fr);
+  margin: 0 auto 16px;
+  max-width: 1320px;
+  padding: 14px;
+}
+
+.settings-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.settings-title strong,
+.settings-title span {
+  display: block;
+}
+
+.settings-title span {
+  color: #66717f;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.settings-form {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.1fr) minmax(150px, 0.9fr) minmax(220px, 1.4fr) auto;
+}
+
+.settings-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.settings-form label > span {
+  color: #66717f;
+  font-size: 12px;
+}
+
+.settings-form input,
+.settings-form select {
+  background: #ffffff;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  color: #17202a;
+  height: 40px;
+  min-width: 0;
+  outline: none;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.settings-form input:focus,
+.settings-form select:focus {
+  border-color: #3f7f68;
+  box-shadow: 0 0 0 3px rgba(63, 127, 104, 0.15);
+}
+
+.key-input {
+  align-items: center;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px;
+}
+
+.key-input:focus-within {
+  border-color: #3f7f68;
+  box-shadow: 0 0 0 3px rgba(63, 127, 104, 0.15);
+}
+
+.key-input input {
+  border: 0;
+  box-shadow: none;
+  height: 38px;
+  padding: 0;
+}
+
+.key-input input:focus {
+  box-shadow: none;
+}
+
+.save-config-button {
+  align-items: center;
+  background: #2f6f59;
+  border: 1px solid #2f6f59;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  height: 40px;
+  justify-content: center;
+  padding: 0 14px;
+}
+
+.save-config-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.config-state {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 7px;
+  justify-self: end;
+  min-width: 0;
+}
+
+.config-state span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-state.ready {
+  color: #286046;
+}
+
+.config-state.empty {
+  color: #725317;
 }
 
 .workspace {
@@ -360,6 +496,24 @@ textarea {
   margin-top: 4px;
 }
 
+@media (max-width: 1180px) {
+  .settings-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .save-config-button {
+    width: 100%;
+  }
+
+  .config-state {
+    justify-self: start;
+  }
+}
+
 @media (max-width: 920px) {
   .shell {
     padding: 12px;
@@ -369,6 +523,11 @@ textarea {
     align-items: flex-start;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .settings-panel,
+  .settings-form {
+    grid-template-columns: 1fr;
   }
 
   .workspace {
@@ -385,4 +544,3 @@ textarea {
     min-height: 720px;
   }
 }
-

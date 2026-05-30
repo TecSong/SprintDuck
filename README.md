@@ -17,12 +17,14 @@ Frontend: `http://127.0.0.1:5173`
 
 ## Environment
 
-Copy `.env.example` to `.env` and set one of:
+Copy `.env.example` to `.env`, or use the model configuration panel in the web app. The panel writes API keys to the local `.env` file and does not send them to the browser after saving.
 
-- `DEEPSEEK_API_KEY`
-- `deepseek_api_key`
+Select the active provider with `LLM_PROVIDER`:
 
-The default model is `deepseek-v4-flash`.
+- `deepseek`: `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`
+- `wanjie_ark`: `WANJIE_ARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
+
+`deepseek_api_key` remains supported as a legacy alias for DeepSeek. `WJARK_API_KEY` is supported as an alias for 万界方舟. The 万界方舟 base URL defaults to `https://maas-openapi.wanjiedata.com/api`.
 
 ## Tests
 
@@ -31,7 +33,7 @@ make test
 make test-real
 ```
 
-`make test-real` uses DeepSeek and synthetic public test cases from `docs/test-cases.md`.
+`make test-real` uses the active configured provider and synthetic public test cases from `docs/test-cases.md`.
 
 ## Docs
 
@@ -41,4 +43,3 @@ make test-real
 - `docs/prototype-ui.md`
 - `docs/harness-design.md`
 - `docs/test-cases.md`
-

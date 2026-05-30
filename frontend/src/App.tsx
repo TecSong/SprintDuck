@@ -1,7 +1,18 @@
-import { Activity, Download, FileText, Send, ShieldCheck, Upload } from "lucide-react";
+import {
+  Activity,
+  CheckCircle2,
+  Download,
+  FileText,
+  KeyRound,
+  Save,
+  Send,
+  Settings,
+  ShieldCheck,
+  Upload
+} from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createSession, sendMessage } from "./api";
-import { ChatLine, SprintReport, StreamEvent } from "./types";
+import { createSession, getLLMConfig, sendMessage, updateLLMConfig } from "./api";
+import { ChatLine, LLMConfigResponse, LLMProviderConfig, SprintReport, StreamEvent } from "./types";
 
 export function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -9,6 +20,13 @@ export function App() {
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
+  const [config, setConfig] = useState<LLMConfigResponse | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState("deepseek");
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configMessage, setConfigMessage] = useState("");
   const [report, setReport] = useState<SprintReport | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -23,9 +41,27 @@ export function App() {
       .catch((error: Error) => {
         setLines([{ id: crypto.randomUUID(), role: "status", text: error.message }]);
       });
+
+    getLLMConfig()
+      .then((nextConfig) => syncConfigForm(nextConfig, nextConfig.active_provider))
+      .catch((error: Error) => setConfigMessage(error.message));
   }, []);
 
   const canSend = useMemo(() => Boolean(sessionId && !pending && (draft.trim() || files.length)), [draft, files, pending, sessionId]);
+  const selectedProvider = useMemo(
+    () => config?.providers.find((provider) => provider.id === selectedProviderId) ?? null,
+    [config, selectedProviderId]
+  );
+  const providerConfigured = Boolean(selectedProvider?.configured);
+
+  const syncConfigForm = (nextConfig: LLMConfigResponse, providerId: string) => {
+    const provider = nextConfig.providers.find((item) => item.id === providerId) ?? nextConfig.providers[0];
+    setConfig(nextConfig);
+    setSelectedProviderId(provider?.id ?? "deepseek");
+    setModel(provider?.model ?? "");
+    setBaseUrl(provider?.base_url ?? "");
+    setApiKey("");
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -48,6 +84,32 @@ export function App() {
       ]);
     } finally {
       setPending(false);
+    }
+  };
+
+  const handleProviderChange = (providerId: string) => {
+    if (!config) return;
+    syncConfigForm(config, providerId);
+    setConfigMessage("");
+  };
+
+  const handleSaveConfig = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSavingConfig(true);
+    setConfigMessage("");
+    try {
+      const nextConfig = await updateLLMConfig({
+        provider: selectedProviderId,
+        api_key: apiKey,
+        model,
+        base_url: baseUrl
+      });
+      syncConfigForm(nextConfig, selectedProviderId);
+      setConfigMessage("已保存到本地 .env");
+    } catch (error) {
+      setConfigMessage(error instanceof Error ? error.message : "模型配置保存失败");
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -102,6 +164,57 @@ export function App() {
           <span>本地会话 · 默认不持久化</span>
         </div>
       </header>
+
+      <section className="settings-panel" aria-label="Model configuration">
+        <div className="settings-title">
+          <Settings aria-hidden="true" size={19} />
+          <div>
+            <strong>模型配置</strong>
+            <span>{selectedProvider ? providerStatusText(selectedProvider) : "读取中"}</span>
+          </div>
+        </div>
+        <form className="settings-form" onSubmit={handleSaveConfig}>
+          <label>
+            <span>服务商</span>
+            <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)}>
+              {config?.providers.map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>API Key</span>
+            <div className="key-input">
+              <KeyRound aria-hidden="true" size={16} />
+              <input
+                autoComplete="off"
+                placeholder={providerConfigured ? "保持当前 API key" : "输入 API key"}
+                type="password"
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+              />
+            </div>
+          </label>
+          <label>
+            <span>模型</span>
+            <input value={model} onChange={(event) => setModel(event.target.value)} />
+          </label>
+          <label>
+            <span>Base URL</span>
+            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
+          </label>
+          <button className="save-config-button" disabled={!config || savingConfig} type="submit">
+            <Save aria-hidden="true" size={16} />
+            <span>{savingConfig ? "保存中" : "保存"}</span>
+          </button>
+        </form>
+        <div className={`config-state ${providerConfigured ? "ready" : "empty"}`}>
+          <CheckCircle2 aria-hidden="true" size={16} />
+          <span>{configMessage || (selectedProvider?.api_key_env ?? "未读取配置")}</span>
+        </div>
+      </section>
 
       <section className="workspace">
         <section className="chat-panel" aria-label="Agent chat">
@@ -172,6 +285,10 @@ export function App() {
   );
 }
 
+function providerStatusText(provider: LLMProviderConfig) {
+  return provider.configured ? `${provider.name} 已配置 · ${provider.api_key_mask}` : `${provider.name} 未配置`;
+}
+
 function ReportView({ report, onDownload }: { report: SprintReport; onDownload: () => void }) {
   return (
     <div className="report">
@@ -239,4 +356,3 @@ function ReportView({ report, onDownload }: { report: SprintReport; onDownload: 
     </div>
   );
 }
-
