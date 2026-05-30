@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from app.agent import SprintDuckAgent
+from app.agent.harness.skills import default_skill_registry
+from app.agent.harness.tools import default_registry
 from app.models import SessionState
 from app.providers import FakeLLMProvider
 
@@ -115,6 +117,12 @@ async def test_agent_runs_minimal_harness_for_jd_match_and_message():
     assistant_reply = "".join(str(event.data["text"]) for event in events if event.event == "assistant_delta")
     assert state["intent"]["primary_intent"] == "jd_match"
     assert state["intent"]["secondary_intents"] == ["application_message"]
+    assert [step["skill"] for step in state["plan"]] == [
+        "jd_match_analyst",
+        "jd_match_analyst",
+        "jd_match_analyst",
+        "application_assistant",
+    ]
     assert [step["tool"] for step in state["plan"]] == ["jd.parse", "evidence.extract", "fit.score", "message.compose"]
     assert [result["tool"] for result in state["tool_results"]] == ["jd.parse", "evidence.extract", "fit.score", "message.compose"]
     assert state["artifact"]["fit"]["priority"] in {"建议投递", "谨慎投递", "低优先级"}
@@ -144,3 +152,16 @@ async def test_agent_harness_asks_for_missing_required_context():
     assert state["intent"]["missing_context"] == ["resume"]
     assert "简历材料" in assistant_reply
     assert session.report is None
+
+
+def test_harness_keeps_tools_and_skills_separate():
+    tools = {spec.name for spec in default_registry().list_specs()}
+    skills = default_skill_registry()
+
+    assert {"jd.parse", "evidence.extract", "fit.score", "message.compose"}.issubset(tools)
+    assert "jd_match_analyst" not in tools
+    assert "application_assistant" not in tools
+    assert skills.get("jd_match_analyst") is not None
+    assert skills.get("application_assistant") is not None
+    assert skills.get("jd_match_analyst").required_tools({}) == ["jd.parse", "evidence.extract", "fit.score"]
+    assert skills.get("application_assistant").required_tools({}) == ["message.compose"]
