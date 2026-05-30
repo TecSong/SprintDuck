@@ -81,8 +81,20 @@ async def _read_text_files(files: list[UploadFile]) -> str:
         if not (name.endswith(".txt") or name.endswith(".md") or name.endswith(".markdown")):
             continue
         raw = await file.read()
-        chunks.append(raw.decode("utf-8", errors="ignore").strip())
+        text = raw.decode("utf-8", errors="ignore").strip()
+        label = _label_for_upload(name)
+        chunks.append(f"{label}：\n{text}" if label else text)
     return "\n\n".join(chunk for chunk in chunks if chunk)
+
+
+def _label_for_upload(filename: str) -> str | None:
+    if any(token in filename for token in ("resume", "cv", "简历")):
+        return "简历"
+    if any(token in filename for token in ("jd", "job", "岗位", "职位")):
+        return "JD"
+    if any(token in filename for token in ("constraint", "deadline", "约束", "时间")):
+        return "约束"
+    return None
 
 
 def _format_sse(event: SseEvent) -> str:

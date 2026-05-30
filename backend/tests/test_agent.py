@@ -46,7 +46,7 @@ async def test_agent_keeps_unlabeled_jd_when_resume_file_is_merged_after_message
     assert "目标岗位 JD" not in state["missing"]
     assert "目标岗位 JD" not in assistant_reply
     assert "关键日期" in state["missing"]
-    assert session.jd_text.startswith("岗位职责")
+    assert session.jd_text.startswith("负责用户增长活动策划")
 
 
 async def test_agent_generates_evidence_backed_report_for_engineering_case():

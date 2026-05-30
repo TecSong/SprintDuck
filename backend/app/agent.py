@@ -34,8 +34,8 @@ MISSING_LABELS = {
 
 SECTION_LABELS = {
     "resume": r"(?:简历|候选人|candidate|resume)\s*[:：]",
-    "jd": r"(?:jd|岗位|职位|job description)\s*[:：]",
-    "constraints": r"(?:约束|限制|时间|constraints)\s*[:：]",
+    "jd": r"(?:jd|目标\s*jd|岗位职责|职位描述|job description)\s*[:：]",
+    "constraints": r"(?:约束|限制|关键日期|面试日期|投递日期|constraints)\s*[:：]",
 }
 
 JD_SIGNAL_TOKENS = ("jd", "岗位", "职位", "职责", "要求", "任职", "job description")
@@ -322,7 +322,12 @@ def _extract_role_confirmation(text: str, status: str) -> RolePreset | None:
 
 
 def _has_deadline(text: str) -> bool:
-    return bool(re.search(r"(明天|后天|\d+\s*天后|\d{1,2}\s*[/-]\s*\d{1,2}|\d{1,2}\s*月\s*\d{1,2}\s*日|面试日期|投递日期)", text))
+    return bool(
+        re.search(
+            r"(明天|后天|\d+\s*天后|(?<![\d-])\d{1,2}\s*[/-]\s*\d{1,2}(?![\d-])|\d{1,2}\s*月\s*\d{1,2}\s*日|面试日期|投递日期)",
+            text,
+        )
+    )
 
 
 def _daily_minutes(text: str) -> int | None:
@@ -336,7 +341,7 @@ def _daily_minutes(text: str) -> int | None:
 
 
 def _stage(text: str) -> str | None:
-    for token in ("一面", "二面", "终面", "投递", "准备", "邀约", "邀请", "面试前", "作品集", "简历"):
+    for token in ("一面", "二面", "终面", "投递", "准备", "邀约", "邀请", "面试前", "作品集"):
         if token in text:
             return token
     return None

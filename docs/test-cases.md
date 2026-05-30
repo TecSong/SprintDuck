@@ -12,6 +12,42 @@ Each real model case passes only if the final report has:
 - at least 5 likely interview questions
 - Markdown export text containing score, gaps, plan, and questions
 
+## Upload Flow Cases
+
+These cases verify the browser upload path and the multipart API path, not only pasted text.
+
+### Upload Case 1: Resume Markdown Only
+
+- File: `samples/test_resume.md`
+- User action: upload the file with an empty text box, then submit.
+- Expected:
+  - upload button shows `1 个文本文件` before submit
+  - send button becomes enabled
+  - assistant asks for missing JD and constraints instead of generating a report
+
+### Upload Case 2: Resume Markdown + JD Markdown + Constraints Text
+
+- Files:
+  - `samples/test_resume.md`
+  - `samples/test_jd.md`
+  - `samples/test_constraints.txt`
+- User action: upload all three files with an empty text box, then submit.
+- Expected:
+  - upload button shows `3 个文本文件` before submit
+  - report is generated
+  - role preset is engineering
+  - sprint plan length is 5 days
+  - report includes Top Gaps and interview questions
+
+### Upload Case 3: Constraints Text Only
+
+- File: `samples/test_constraints.txt`
+- User action: upload the file with an empty text box, then submit.
+- Expected:
+  - upload button shows `1 个文本文件` before submit
+  - assistant still asks for resume and JD
+  - missing context no longer includes key date, daily minutes, or current stage
+
 ## Case 1: Software Engineering
 
 Candidate:

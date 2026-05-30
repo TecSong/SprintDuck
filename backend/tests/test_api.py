@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 
 from app.main import app
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def parse_sse(raw: str):
@@ -76,3 +79,80 @@ async def test_chat_api_keeps_message_jd_when_resume_file_uploaded():
         assert "目标岗位 JD" not in state["missing"]
         assert "目标岗位 JD" not in assistant_reply
         assert "关键日期" in state["missing"]
+
+
+async def test_chat_api_accepts_md_and_txt_file_uploads_without_message():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        resume = (ROOT / "samples" / "test_resume.md").read_text()
+        jd = (ROOT / "samples" / "test_jd.md").read_text()
+        constraints = (ROOT / "samples" / "test_constraints.txt").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": ""},
+            files=[
+                ("files", ("test_resume.md", resume, "text/markdown")),
+                ("files", ("test_jd.md", jd, "text/markdown")),
+                ("files", ("test_constraints.txt", constraints, "text/plain")),
+            ],
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        report = next(data for event, data in events if event == "report")
+        assert report["role"] == "engineering"
+        assert len(report["sprint_plan"]) == 5
+        assert "## Top Gaps" in report["markdown"]
+
+
+async def test_chat_api_txt_upload_contributes_constraints():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        constraints = (ROOT / "samples" / "test_constraints.txt").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": ""},
+            files=[("files", ("test_constraints.txt", constraints, "text/plain"))],
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        state = next(data for event, data in events if event == "state")
+        assert "简历材料" in state["missing"]
+        assert "目标岗位 JD" in state["missing"]
+        assert "关键日期" not in state["missing"]
+        assert "每天可投入时间" not in state["missing"]
+        assert "当前求职阶段" not in state["missing"]
+
+
+async def test_chat_api_resume_upload_does_not_satisfy_constraints():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        resume = (ROOT / "samples" / "test_resume.md").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": ""},
+            files=[("files", ("test_resume.md", resume, "text/markdown"))],
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        state = next(data for event, data in events if event == "state")
+        assert "简历材料" not in state["missing"]
+        assert "目标岗位 JD" in state["missing"]
+        assert "关键日期" in state["missing"]
+        assert "每天可投入时间" in state["missing"]
+        assert "当前求职阶段" in state["missing"]
