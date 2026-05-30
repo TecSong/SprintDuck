@@ -14,15 +14,15 @@ from .models import (
     LLMConfigResponse,
     SessionState,
     SseEvent,
-    UpdateLLMConfigRequest,
 )
-from .providers import build_provider_from_env, llm_config_payload, save_llm_config
+from .providers import build_provider_from_env, llm_config_payload
 from .session_store import InMemorySessionStore
 
 app = FastAPI(title="SprintDuckAgent API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):517[3-9]$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,16 +40,6 @@ async def health() -> HealthResponse:
 @app.get("/api/llm/config", response_model=LLMConfigResponse)
 async def get_llm_config() -> dict[str, object]:
     return llm_config_payload()
-
-
-@app.put("/api/llm/config", response_model=LLMConfigResponse)
-async def update_llm_config(payload: UpdateLLMConfigRequest) -> dict[str, object]:
-    try:
-        config = save_llm_config(payload.provider, payload.api_key, payload.model, payload.base_url)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    agent.provider = build_provider_from_env()
-    return config
 
 
 @app.post("/api/chat/sessions", response_model=CreateSessionResponse)
@@ -136,4 +126,5 @@ def _llm_warning() -> str | None:
     )
     if not active or active["configured"]:
         return None
-    return f"当前 {active['name']} 尚未配置 API Key。请点击右上角齿轮填写 {active['api_key_env']}。"
+    key_name = "wjark_api_key" if active["id"] == "wanjie_ark" else active["api_key_env"]
+    return f"当前 {active['name']} 尚未配置 API Key。请在主 worktree 的 .env 中配置 {key_name}。"

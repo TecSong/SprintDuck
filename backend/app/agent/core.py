@@ -95,6 +95,8 @@ class SprintDuckAgent:
                     harness_run = progress.run
             if not harness_run:
                 raise RuntimeError("Harness did not produce a result")
+            yield SseEvent(event="status", data={"message": "正在调用已配置大模型生成真实回答。"})
+            harness_run = await self._enrich_harness_with_llm(harness_run, session)
             session.status = "report_ready"
             session.messages.append(ChatMessage(role="assistant", content=harness_run.summary))
             yield SseEvent(event="assistant_delta", data={"text": harness_run.summary})
@@ -130,6 +132,7 @@ class SprintDuckAgent:
 
         session.status = "ready_to_report"
         yield SseEvent(event="status", data={"message": "上下文足够，正在生成证据化冲刺报告。"})
+        yield SseEvent(event="status", data={"message": "正在调用已配置大模型生成真实回答。"})
         report = await self._generate_report(session, low_confidence=bool(quality.missing or quality.low_confidence))
         session.report = report
         session.status = "report_ready"
@@ -264,6 +267,40 @@ class SprintDuckAgent:
         report.markdown = render_report_markdown(report)
         return report
 
+    async def _enrich_harness_with_llm(self, run: HarnessRun, session: SessionState) -> HarnessRun:
+        system = (
+            "你是求职 Agent，只能基于已给简历、JD 和本地工具产物生成候选人可见回答。"
+            "返回 JSON，字段为 summary。不要编造经历，不要声称已自动投递或发送。"
+        )
+        user = json.dumps(
+            {
+                "resume": session.resume_text[:4000],
+                "jd": session.jd_text[:4000],
+                "intent": _intent_payload(run.intent),
+                "plan": [
+                    {
+                        "tool": step.tool_name,
+                        "skill": step.skill_name,
+                        "purpose": step.purpose,
+                    }
+                    for step in run.plan
+                ],
+                "artifact": run.artifact,
+                "draft_summary": run.summary,
+            },
+            ensure_ascii=False,
+        )
+        enriched = await self.provider.generate_json(system, user)
+        if not isinstance(enriched.get("summary"), str) or not enriched["summary"].strip():
+            raise RuntimeError("大模型响应缺少 summary，无法生成真实回答。")
+        return HarnessRun(
+            intent=run.intent,
+            plan=run.plan,
+            tool_results=run.tool_results,
+            artifact=run.artifact,
+            summary=enriched["summary"].strip(),
+        )
+
     def _build_gaps(self, criteria: tuple[Criterion, ...], resume_text: str, jd_text: str) -> list[GapItem]:
         resume_chunks = _chunks(resume_text)
         jd_chunks = _chunks(jd_text)
@@ -307,14 +344,11 @@ class SprintDuckAgent:
             },
             ensure_ascii=False,
         )
-        try:
-            enriched = await self.provider.generate_json(system, user)
-        except Exception:
-            return report
-        if not enriched:
-            return report
+        enriched = await self.provider.generate_json(system, user)
         if isinstance(enriched.get("summary"), str) and enriched["summary"].strip():
             report.summary = enriched["summary"].strip()
+        else:
+            raise RuntimeError("大模型响应缺少 summary，无法生成真实回答。")
         raw_questions = enriched.get("interview_questions")
         if isinstance(raw_questions, list):
             parsed: list[InterviewQuestion] = []
@@ -329,7 +363,8 @@ class SprintDuckAgent:
                     )
             if len(parsed) >= 5:
                 report.interview_questions = parsed
-        return report
+                return report
+        raise RuntimeError("大模型响应缺少有效的 interview_questions，无法生成真实回答。")
 
 
 def _append(current: str, addition: str) -> str:

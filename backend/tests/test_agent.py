@@ -1,10 +1,36 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from app.agent import SprintDuckAgent
 from app.agent.harness.skills import default_skill_registry
 from app.agent.harness.tools import default_registry
 from app.models import SessionState
-from app.providers import FakeLLMProvider
+
+
+class StubLLMProvider:
+    async def generate_json(self, system: str, user: str) -> dict[str, object]:
+        payload = json.loads(user)
+        if payload.get("draft_summary"):
+            return {"summary": f"大模型生成：{payload['draft_summary']}"}
+        return {
+            "summary": "大模型基于简历和 JD 生成的测试总结。",
+            "interview_questions": [
+                {
+                    "question": f"请说明第 {index} 个关键经历。",
+                    "why_it_matters": "验证岗位关键要求。",
+                    "linked_gap": "岗位匹配证据",
+                }
+                for index in range(1, 6)
+            ],
+        }
+
+
+class EmptyLLMProvider:
+    async def generate_json(self, system: str, user: str) -> dict[str, object]:
+        return {}
 
 
 async def collect(agent: SprintDuckAgent, session: SessionState, text: str):
@@ -16,7 +42,7 @@ def event_names(events):
 
 
 async def test_agent_asks_for_missing_context_before_reporting():
-    agent = SprintDuckAgent(FakeLLMProvider())
+    agent = SprintDuckAgent(StubLLMProvider())
     session = SessionState(session_id="s1")
 
     events = await collect(agent, session, "简历：我做过 React 和 Node.js 项目。")
@@ -28,7 +54,7 @@ async def test_agent_asks_for_missing_context_before_reporting():
 
 
 async def test_agent_keeps_unlabeled_jd_when_resume_file_is_merged_after_message():
-    agent = SprintDuckAgent(FakeLLMProvider())
+    agent = SprintDuckAgent(StubLLMProvider())
     session = SessionState(session_id="s1b")
 
     events = await collect(
@@ -52,7 +78,7 @@ async def test_agent_keeps_unlabeled_jd_when_resume_file_is_merged_after_message
 
 
 async def test_agent_generates_evidence_backed_report_for_engineering_case():
-    agent = SprintDuckAgent(FakeLLMProvider())
+    agent = SprintDuckAgent(StubLLMProvider())
     session = SessionState(session_id="s2")
 
     await collect(
@@ -78,7 +104,7 @@ async def test_agent_generates_evidence_backed_report_for_engineering_case():
 
 
 async def test_agent_limits_plan_to_seven_days_for_longer_deadline():
-    agent = SprintDuckAgent(FakeLLMProvider())
+    agent = SprintDuckAgent(StubLLMProvider())
     session = SessionState(session_id="s3")
 
     await collect(agent, session, "简历：我做过 3 年 B2B 产品经理，负责客户后台、权限配置和数据看板。熟悉用户访谈、PRD、需求优先级排序和跨部门推进。上线数据看板模块，使运营团队每周手动统计时间减少约 6 小时。")
@@ -91,7 +117,7 @@ async def test_agent_limits_plan_to_seven_days_for_longer_deadline():
 
 
 async def test_agent_runs_minimal_harness_for_jd_match_and_message():
-    agent = SprintDuckAgent(FakeLLMProvider())
+    agent = SprintDuckAgent(StubLLMProvider())
     session = SessionState(session_id="s4")
 
     events = await collect(
@@ -143,7 +169,7 @@ async def test_agent_runs_minimal_harness_for_jd_match_and_message():
 
 
 async def test_agent_harness_asks_for_missing_required_context():
-    agent = SprintDuckAgent(FakeLLMProvider())
+    agent = SprintDuckAgent(StubLLMProvider())
     session = SessionState(session_id="s5")
 
     events = await collect(
@@ -162,6 +188,17 @@ async def test_agent_harness_asks_for_missing_required_context():
     assert state["intent"]["missing_context"] == ["resume"]
     assert "简历材料" in assistant_reply
     assert session.report is None
+
+
+async def test_agent_requires_valid_llm_response_for_report_generation():
+    agent = SprintDuckAgent(EmptyLLMProvider())
+    session = SessionState(session_id="s6")
+
+    await collect(agent, session, "简历：我有 3 年前端工程经验，负责 React、TypeScript、性能优化、组件库和跨团队协作。曾把核心页面首屏从 4 秒优化到 1.5 秒，并接入过 FastAPI SSE 大模型应用。")
+    await collect(agent, session, "JD：岗位：AI 产品方向前端工程师。要求：负责 Agent Web 工作台、对话、报告、任务流和配置界面；熟悉 React、TypeScript、工程化、性能优化，并能接入大模型和工具调用。")
+
+    with pytest.raises(RuntimeError, match="大模型响应缺少 summary"):
+        await collect(agent, session, "约束：面试日期是 5 天后，每天可以投入 90 分钟，目前阶段是已经拿到一面邀请。")
 
 
 def test_harness_keeps_tools_and_skills_separate():

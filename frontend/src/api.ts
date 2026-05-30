@@ -1,4 +1,4 @@
-import { LLMConfigResponse, SessionResponse, StreamEvent, UpdateLLMConfigPayload } from "./types";
+import { LLMConfigResponse, SessionResponse, StreamEvent } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -11,16 +11,6 @@ export async function createSession(): Promise<SessionResponse> {
 export async function getLLMConfig(): Promise<LLMConfigResponse> {
   const response = await fetch(`${API_BASE}/api/llm/config`);
   if (!response.ok) throw new Error("无法读取模型配置");
-  return response.json();
-}
-
-export async function updateLLMConfig(payload: UpdateLLMConfigPayload): Promise<LLMConfigResponse> {
-  const response = await fetch(`${API_BASE}/api/llm/config`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) throw new Error("模型配置保存失败");
   return response.json();
 }
 

@@ -8,19 +8,14 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
-from dotenv import dotenv_values, load_dotenv, set_key
+from dotenv import dotenv_values, load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROVIDER_ID = "wanjie_ark"
 
 
 class LLMProvider(Protocol):
-    async def generate_json(self, system: str, user: str) -> dict[str, Any] | None: ...
-
-
-class FakeLLMProvider:
-    async def generate_json(self, system: str, user: str) -> dict[str, Any] | None:
-        return None
+    async def generate_json(self, system: str, user: str) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -79,9 +74,10 @@ class OpenAICompatibleProvider:
     def configured(self) -> bool:
         return bool(self.api_key)
 
-    async def generate_json(self, system: str, user: str) -> dict[str, Any] | None:
+    async def generate_json(self, system: str, user: str) -> dict[str, Any]:
         if not self.api_key:
-            return None
+            key_name = "wjark_api_key" if self.spec.id == "wanjie_ark" else self.spec.api_key_env
+            raise RuntimeError(f"{self.spec.name} 未配置 API Key，请在主 worktree 的 .env 中配置 {key_name}。")
 
         payload = {
             "model": self.model,
@@ -95,14 +91,23 @@ class OpenAICompatibleProvider:
             payload["response_format"] = {"type": "json_object"}
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=45) as client:
-            response = await client.post(
-                _join_api_url(self.base_url, self.spec.chat_completions_path),
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-        return _parse_json_object(content)
+            try:
+                response = await client.post(
+                    _join_api_url(self.base_url, self.spec.chat_completions_path),
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                content = response.json()["choices"][0]["message"]["content"]
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(f"{self.spec.name} API 调用失败：HTTP {exc.response.status_code}") from exc
+            except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+                raise RuntimeError(f"{self.spec.name} API 调用失败：{exc}") from exc
+
+        parsed = _parse_json_object(content)
+        if not parsed:
+            raise RuntimeError(f"{self.spec.name} API 未返回可解析 JSON。")
+        return parsed
 
 
 class DeepSeekProvider(OpenAICompatibleProvider):
@@ -122,31 +127,6 @@ def llm_config_payload() -> dict[str, Any]:
         "active_provider": _active_provider_id(values),
         "providers": [_provider_payload(spec, values) for spec in PROVIDER_SPECS],
     }
-
-
-def save_llm_config(provider: str, api_key: str | None, model: str | None, base_url: str | None) -> dict[str, Any]:
-    spec = PROVIDER_SPEC_BY_ID.get(provider)
-    if not spec:
-        raise ValueError("Unsupported provider")
-
-    env_file = _env_file()
-    env_file.parent.mkdir(parents=True, exist_ok=True)
-    env_file.touch(exist_ok=True)
-
-    updates = {"LLM_PROVIDER": spec.id}
-    if api_key and api_key.strip():
-        updates[spec.api_key_env] = api_key.strip()
-    if model and model.strip():
-        updates[spec.model_env] = model.strip()
-    if base_url and base_url.strip():
-        updates[spec.base_url_env] = base_url.strip().rstrip("/")
-
-    for key, value in updates.items():
-        set_key(str(env_file), key, value, quote_mode="never")
-        os.environ[key] = value
-
-    load_dotenv(env_file, override=True)
-    return llm_config_payload()
 
 
 def _provider_payload(spec: ProviderSpec, values: dict[str, str]) -> dict[str, Any]:
@@ -178,7 +158,30 @@ def _active_provider_id(values: dict[str, str]) -> str:
 
 
 def _env_file() -> Path:
-    return Path(os.getenv("SPRINTDUCK_ENV_FILE", str(REPO_ROOT / ".env")))
+    if explicit := os.getenv("SPRINTDUCK_ENV_FILE"):
+        return Path(explicit)
+    main_env = _main_worktree_env()
+    if main_env and main_env.exists():
+        return main_env
+    return REPO_ROOT / ".env"
+
+
+def _main_worktree_env() -> Path | None:
+    git_file = REPO_ROOT / ".git"
+    if not git_file.is_file():
+        return None
+    try:
+        content = git_file.read_text().strip()
+    except OSError:
+        return None
+    if not content.startswith("gitdir:"):
+        return None
+    git_dir = Path(content.removeprefix("gitdir:").strip())
+    if not git_dir.is_absolute():
+        git_dir = (REPO_ROOT / git_dir).resolve()
+    if git_dir.parent.name != "worktrees":
+        return None
+    return git_dir.parent.parent.parent / ".env"
 
 
 def _env_values(env_file: Path) -> dict[str, str]:

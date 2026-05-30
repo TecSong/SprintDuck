@@ -112,10 +112,3 @@ class LLMProviderConfig(BaseModel):
 class LLMConfigResponse(BaseModel):
     active_provider: str
     providers: list[LLMProviderConfig]
-
-
-class UpdateLLMConfigRequest(BaseModel):
-    provider: str
-    api_key: str | None = None
-    model: str | None = None
-    base_url: str | None = None
