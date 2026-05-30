@@ -48,6 +48,103 @@ These cases verify the browser upload path and the multipart API path, not only 
   - assistant still asks for resume and JD
   - missing context no longer includes key date, daily minutes, or current stage
 
+### Mixed Input Case 1: Resume Markdown + Pasted JD
+
+- File: `samples/test_resume.md`
+- Text box: content from `samples/test_jd.md`
+- Expected:
+  - upload button shows `1 个文本文件` before submit
+  - assistant asks for key date, daily minutes, and current stage
+  - assistant does not ask for resume or JD again
+
+### Mixed Input Case 2: Resume Markdown + Pasted JD + Pasted Constraints
+
+- File: `samples/test_resume.md`
+- Text box:
+  - content from `samples/test_jd.md`
+  - content from `samples/test_constraints.txt`
+- Expected:
+  - report is generated
+  - role preset is engineering
+  - sprint plan length is 5 days
+
+### Mixed Input Case 3: Pasted JD + Resume Markdown + Constraints Text
+
+- Files:
+  - `samples/test_resume.md`
+  - `samples/test_constraints.txt`
+- Text box: content from `samples/test_jd.md`
+- Expected:
+  - report is generated
+  - role preset is engineering
+  - sprint plan length is 5 days
+
+### Mixed Input Case 4: Pasted Resume + Pasted Constraints + JD Markdown
+
+- File: `samples/test_jd.md`
+- Text box:
+  - content from `samples/test_resume.md`
+  - content from `samples/test_constraints.txt`
+- Expected:
+  - report is generated
+  - role preset is engineering
+  - sprint plan length is 5 days
+
+### Mixed Input Case 5: Resume Markdown + JD Markdown + Constraints Text
+
+- Files:
+  - `samples/test_resume.md`
+  - `samples/test_jd.md`
+  - `samples/test_constraints.txt`
+- Text box: empty
+- Expected:
+  - upload button shows `3 个文本文件` before submit
+  - report is generated
+  - role preset is engineering
+  - sprint plan length is 5 days
+
+### Mixed Input Case 6: Complete Pasted Markdown
+
+- Text box:
+  - content from `samples/test_resume.md`
+  - content from `samples/test_jd.md`
+  - content from `samples/test_constraints.txt`
+- Expected:
+  - report is generated
+  - role preset is engineering
+  - sprint plan length is 5 days
+
+### Mixed Input Case 7: Resume Markdown Only
+
+- File: `samples/test_resume.md`
+- Text box: empty
+- Expected:
+  - upload button shows `1 个文本文件` before submit
+  - assistant asks for JD, key date, daily minutes, and current stage
+  - assistant does not ask for resume again
+
+### Mixed Input Case 8: Constraints Text Only
+
+- File: `samples/test_constraints.txt`
+- Text box: empty
+- Expected:
+  - upload button shows `1 个文本文件` before submit
+  - assistant asks for resume and JD
+  - assistant does not ask for key date, daily minutes, or current stage
+
+### Mixed Input Case 9: Multi-turn Resume File + Pasted JD, Then Pasted Constraints
+
+- First turn:
+  - File: `samples/test_resume.md`
+  - Text box: content from `samples/test_jd.md`
+- Second turn:
+  - Text box: content from `samples/test_constraints.txt`
+- Expected:
+  - first turn asks for key date, daily minutes, and current stage
+  - second turn generates a report
+  - role preset is engineering
+  - sprint plan length is 5 days
+
 ## Case 1: Software Engineering
 
 Candidate:

@@ -39,7 +39,7 @@ SECTION_LABELS = {
 }
 
 JD_SIGNAL_TOKENS = ("jd", "岗位", "职位", "职责", "要求", "任职", "job description")
-RESUME_SIGNAL_TOKENS = ("简历", "经历", "项目", "负责", "我是一名", "我有")
+RESUME_SIGNAL_TOKENS = ("简历", "resume", "我是一名", "我有")
 
 
 @dataclass(frozen=True)
@@ -126,6 +126,8 @@ class SprintDuckAgent:
             session.resume_text = _append(session.resume_text, text)
         if sections:
             for prefix in _unlabeled_prefixes(text):
+                if _has_resume_signal(prefix):
+                    session.resume_text = _append(session.resume_text, prefix)
                 if _has_jd_signal(prefix):
                     session.jd_text = _append(session.jd_text, prefix)
         if has_constraint_signal:
@@ -305,7 +307,24 @@ def _has_jd_signal(text: str) -> bool:
 
 
 def _has_resume_signal(text: str) -> bool:
-    return any(token in text for token in RESUME_SIGNAL_TOKENS)
+    lower = text.lower()
+    strong_tokens = (
+        "基本信息",
+        "求职意向",
+        "个人简介",
+        "技能清单",
+        "工作经历",
+        "项目经历",
+        "教育背景",
+        "证书与奖项",
+        "自我评价",
+        "工作年限",
+        "邮箱",
+        "手机",
+    )
+    if any(token in lower for token in RESUME_SIGNAL_TOKENS):
+        return True
+    return sum(1 for token in strong_tokens if token in text) >= 2
 
 
 def _extract_role_confirmation(text: str, status: str) -> RolePreset | None:
@@ -341,9 +360,15 @@ def _daily_minutes(text: str) -> int | None:
 
 
 def _stage(text: str) -> str | None:
-    for token in ("一面", "二面", "终面", "投递", "准备", "邀约", "邀请", "面试前", "作品集"):
-        if token in text:
-            return token
+    stage_patterns = (
+        r"(?:当前|目前|求职)?阶段\s*(?:是|为|[:：])?\s*(一面|二面|终面|投递|准备|邀约|邀请|面试前|作品集)",
+        r"(已经|已|刚刚)?拿到.{0,12}(一面|二面|终面|面试|邀约|邀请)",
+        r"(面试前|最后准备|准备定制简历|准备作品集|准备面试)",
+    )
+    for pattern in stage_patterns:
+        match = re.search(pattern, text)
+        if match:
+            return next((group for group in match.groups() if group), match.group(0))
     return None
 
 

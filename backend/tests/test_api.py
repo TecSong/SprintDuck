@@ -156,3 +156,101 @@ async def test_chat_api_resume_upload_does_not_satisfy_constraints():
         assert "关键日期" in state["missing"]
         assert "每天可投入时间" in state["missing"]
         assert "当前求职阶段" in state["missing"]
+
+
+async def test_chat_api_resume_file_with_jd_message_still_requires_constraints():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        resume = (ROOT / "samples" / "test_resume.md").read_text()
+        jd = (ROOT / "samples" / "test_jd.md").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": jd},
+            files=[("files", ("test_resume.md", resume, "text/markdown"))],
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        state = next(data for event, data in events if event == "state")
+        assistant_reply = "".join(str(data["text"]) for event, data in events if event == "assistant_delta")
+        assert "简历材料" not in state["missing"]
+        assert "目标岗位 JD" not in state["missing"]
+        assert "关键日期" in state["missing"]
+        assert "每天可投入时间" in state["missing"]
+        assert "当前求职阶段" in state["missing"]
+        assert "当前求职阶段" in assistant_reply
+
+
+async def test_chat_api_resume_file_with_jd_and_constraints_message_generates_report():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        resume = (ROOT / "samples" / "test_resume.md").read_text()
+        jd = (ROOT / "samples" / "test_jd.md").read_text()
+        constraints = (ROOT / "samples" / "test_constraints.txt").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": f"{jd}\n\n{constraints}"},
+            files=[("files", ("test_resume.md", resume, "text/markdown"))],
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        report = next(data for event, data in events if event == "report")
+        assert report["role"] == "engineering"
+        assert len(report["sprint_plan"]) == 5
+        assert "## 高频追问" in report["markdown"]
+
+
+async def test_chat_api_jd_file_with_resume_and_constraints_message_generates_report():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        resume = (ROOT / "samples" / "test_resume.md").read_text()
+        jd = (ROOT / "samples" / "test_jd.md").read_text()
+        constraints = (ROOT / "samples" / "test_constraints.txt").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": f"{resume}\n\n{constraints}"},
+            files=[("files", ("test_jd.md", jd, "text/markdown"))],
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        report = next(data for event, data in events if event == "report")
+        assert report["role"] == "engineering"
+        assert len(report["sprint_plan"]) == 5
+        assert "## 高频追问" in report["markdown"]
+
+
+async def test_chat_api_complete_unlabeled_markdown_message_generates_report():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+        resume = (ROOT / "samples" / "test_resume.md").read_text()
+        jd = (ROOT / "samples" / "test_jd.md").read_text()
+        constraints = (ROOT / "samples" / "test_constraints.txt").read_text()
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": f"{resume}\n\n{jd}\n\n{constraints}"},
+        )
+        assert response.status_code == 200
+
+        events = parse_sse(response.text)
+        report = next(data for event, data in events if event == "report")
+        assert report["role"] == "engineering"
+        assert len(report["sprint_plan"]) == 5
+        assert "## 高频追问" in report["markdown"]
