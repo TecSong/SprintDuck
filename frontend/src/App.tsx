@@ -1,17 +1,24 @@
 import {
   Activity,
+  ArrowRight,
   BriefcaseBusiness,
+  Building2,
   CheckCircle2,
   ClipboardList,
   Download,
+  FilePenLine,
   FileText,
+  Gauge,
   KeyRound,
+  LockKeyhole,
   MessageSquareText,
+  Network,
   Save,
   Send,
   Settings,
   ShieldCheck,
   Upload,
+  Workflow,
   X
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -73,6 +80,15 @@ JD：
 面试日期：2026-06-03
 每天可投入时间：90 分钟
 当前求职阶段：准备投递并争取一面机会`;
+
+const WORKFLOW_STAGES = ["发现岗位", "匹配诊断", "简历优化", "投递沟通", "面试冲刺", "Offer 谈判"];
+
+const SKILL_SURFACE = [
+  { name: "resume_optimizer", target: "简历证据与岗位改写" },
+  { name: "company_researcher", target: "公司背调与风险信号" },
+  { name: "interview_sprint", target: "1-7 天面试冲刺" },
+  { name: "platform_connector", target: "Boss / 脉脉 · 授权后执行" }
+];
 
 export function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -234,17 +250,20 @@ export function App() {
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <Activity aria-hidden="true" size={22} />
+      <header className="command-bar">
+        <div className="brand-lockup">
+          <div className="brand-mark" aria-hidden="true">
+            <Activity size={22} />
+          </div>
           <div>
             <strong>SprintDuckAgent</strong>
-            <span>隐私优先求职工作台</span>
+            <span>Privacy-first job agent</span>
           </div>
         </div>
-        <div className="topbar-actions">
-          <div className="privacy-note">
-            <ShieldCheck aria-hidden="true" size={18} />
+
+        <div className="command-status">
+          <div className="status-chip">
+            <ShieldCheck aria-hidden="true" size={16} />
             <span>{egressSummary.short}</span>
           </div>
           <div className="settings-menu">
@@ -323,23 +342,20 @@ export function App() {
       </header>
 
       <section className="workspace">
-        <section className="chat-panel" aria-label="Agent chat">
-          <header className="panel-head">
-            <div>
-              <p>Job Search Agent</p>
-              <h1>从 JD 到投递话术和面试冲刺</h1>
-            </div>
-            <button className="sample-button" type="button" onClick={loadDemoPrompt}>
-              <ClipboardList aria-hidden="true" size={16} />
-              <span>加载演示材料</span>
-            </button>
-          </header>
+        <aside className="left-rail" aria-label="Job command center">
+          <section className="mission-panel">
+            <p className="eyebrow">JOB SEARCH WORKBENCH / CHINA MARKET</p>
+            <h1>从岗位发现到 Offer 的行动工作台</h1>
+            <p>
+              本地组织简历、JD、公司资料和投递上下文；外部模型和平台连接只在用户看清数据边界后执行。
+            </p>
+          </section>
 
           <section className="privacy-panel" aria-label="privacy mode">
-            <div className="privacy-panel-copy">
-              <ShieldCheck aria-hidden="true" size={18} />
+            <div className="section-title">
+              <LockKeyhole aria-hidden="true" size={18} />
               <div>
-                <strong>隐私外发预览</strong>
+                <strong>外发控制台</strong>
                 <span>{egressSummary.detail}</span>
               </div>
             </div>
@@ -352,15 +368,67 @@ export function App() {
                   type="button"
                   onClick={() => setPrivacyMode(mode.id)}
                 >
-                  {mode.label}
+                  <span>{mode.label}</span>
                 </button>
               ))}
             </div>
             <p>{selectedPrivacyMode.description}</p>
           </section>
 
-          <div className="missing-strip" aria-label="missing context">
-            {missing.length ? missing.map((item) => <span key={item}>{item}</span>) : <span>上下文已满足报告生成要求</span>}
+          <section className="chain-panel" aria-label="job chain">
+            <div className="section-title">
+              <Workflow aria-hidden="true" size={18} />
+              <div>
+                <strong>求职链路</strong>
+                <span>Agent 负责判断与草稿，高影响动作由用户确认。</span>
+              </div>
+            </div>
+            <ol className="chain-list">
+              {WORKFLOW_STAGES.map((stage, index) => (
+                <li className={index === 2 ? "active" : ""} key={stage}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{stage}</strong>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="surface-panel" aria-label="skills and mcps">
+            <div className="section-title">
+              <Network aria-hidden="true" size={18} />
+              <div>
+                <strong>Skills / MCP 边界</strong>
+                <span>本地优先，连接器授权后再行动。</span>
+              </div>
+            </div>
+            <div className="skill-grid">
+              {SKILL_SURFACE.map((skill) => (
+                <article key={skill.name}>
+                  <span>{skill.name}</span>
+                  <p>{skill.target}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </aside>
+
+        <section className="workbench-panel" aria-label="Agent workspace">
+          <header className="panel-head">
+            <div>
+              <p className="eyebrow">CURRENT LOOP / RESUME + JD</p>
+              <h2>先跑通可信诊断，再进入投递与面试行动。</h2>
+            </div>
+            <button className="sample-button" type="button" onClick={loadDemoPrompt}>
+              <ClipboardList aria-hidden="true" size={16} />
+              <span>加载演示材料</span>
+            </button>
+          </header>
+
+          <div className="context-strip" aria-label="missing context">
+            <span className="context-label">缺失上下文</span>
+            <div>
+              {missing.length ? missing.map((item) => <span key={item}>{item}</span>) : <span>上下文已满足报告生成要求</span>}
+            </div>
           </div>
 
           <div className="transcript">
@@ -371,14 +439,18 @@ export function App() {
             ))}
             {pending ? (
               <article className="bubble status">
-                <p>Agent 正在处理...</p>
+                <p>Agent 正在生成诊断、投递话术和面试冲刺计划...</p>
               </article>
             ) : null}
           </div>
 
           <form className="composer" onSubmit={handleSubmit}>
+            <label className="composer-label" htmlFor="job-context">
+              候选人资料 / 目标 JD / 约束
+            </label>
             <textarea
-              placeholder="粘贴简历、JD、目标公司、面试日期、每天可投入时间或当前投递阶段。"
+              id="job-context"
+              placeholder="粘贴简历、目标 JD、目标公司、面试日期、每天可投入时间、当前投递阶段。"
               rows={5}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -396,23 +468,15 @@ export function App() {
                 />
               </label>
               <button className="send-button" disabled={!canSend} type="submit">
+                <span>{pending ? "处理中" : "生成可信闭环"}</span>
                 <Send aria-hidden="true" size={17} />
-                <span>{pending ? "发送中" : "发送"}</span>
               </button>
             </div>
           </form>
         </section>
 
         <section className="report-panel" aria-label="Sprint report">
-          {!report ? (
-            <div className="empty-report">
-              <FileText aria-hidden="true" size={34} />
-              <h2>等待求职诊断</h2>
-              <p>报告会展示 JD 匹配、证据差距、简历优化方向、投递话术和 1-7 天面试冲刺计划。</p>
-            </div>
-          ) : (
-            <ReportView report={report} onDownload={downloadMarkdown} />
-          )}
+          {!report ? <EmptyReport /> : <ReportView report={report} onDownload={downloadMarkdown} />}
         </section>
       </section>
     </main>
@@ -481,29 +545,57 @@ function applicationDrafts(report: SprintReport) {
   ];
 }
 
+function EmptyReport() {
+  return (
+    <div className="empty-report">
+      <div className="empty-mark" aria-hidden="true">
+        <FileText size={30} />
+      </div>
+      <p className="eyebrow">WAITING FOR TRUSTED LOOP</p>
+      <h2>等待首个求职诊断</h2>
+      <p>
+        发送简历和目标 JD 后，这里会生成一份可行动报告：匹配差距、简历改写、投递话术、面试冲刺和下一步 Pipeline。
+      </p>
+      <div className="empty-grid">
+        <span>JD 匹配</span>
+        <span>简历证据</span>
+        <span>投递草稿</span>
+        <span>面试冲刺</span>
+      </div>
+    </div>
+  );
+}
+
 function ReportView({ report, onDownload }: { report: SprintReport; onDownload: () => void }) {
   const drafts = applicationDrafts(report);
   return (
     <div className="report">
       <header className="report-head">
-        <div>
-          <p>Job Fit Readiness</p>
-          <h2>{report.readiness_score}/100</h2>
-          <span>{report.readiness_band} · 证据覆盖率 {(report.evidence_coverage * 100).toFixed(0)}%</span>
+        <div className="score-block">
+          <span>Job Fit Readiness</span>
+          <strong>{report.readiness_score}</strong>
+          <small>/100</small>
+        </div>
+        <div className="report-head-copy">
+          <p className="eyebrow">DIAGNOSIS / {roleLabel(report.role)}</p>
+          <h2>{report.summary}</h2>
+          <div className="metric-row">
+            <span>{report.readiness_band}</span>
+            <span>证据覆盖率 {(report.evidence_coverage * 100).toFixed(0)}%</span>
+            <span>信心 {report.confidence}</span>
+          </div>
         </div>
         <button className="download-button" type="button" onClick={onDownload}>
           <Download aria-hidden="true" size={17} />
-          <span>Markdown</span>
+          <span>导出 Markdown</span>
         </button>
       </header>
 
-      <section className="summary-block">
-        <h3>求职诊断总结</h3>
-        <p>{report.summary}</p>
-      </section>
-
-      <section className="section-block">
-        <h3>JD 匹配差距</h3>
+      <section className="report-section">
+        <div className="section-kicker">
+          <Gauge aria-hidden="true" size={17} />
+          <span>JD 匹配差距</span>
+        </div>
         <div className="gap-list">
           {report.top_gaps.map((gap) => (
             <article className="gap-card" key={gap.title}>
@@ -519,12 +611,15 @@ function ReportView({ report, onDownload }: { report: SprintReport; onDownload: 
         </div>
       </section>
 
-      <section className="section-block">
-        <h3>简历优化优先级</h3>
+      <section className="report-section">
+        <div className="section-kicker">
+          <FilePenLine aria-hidden="true" size={17} />
+          <span>简历优化优先级</span>
+        </div>
         <div className="action-list">
           {report.top_gaps.slice(0, 3).map((gap, index) => (
             <article className="action-row" key={gap.title}>
-              <span>{index + 1}</span>
+              <span>{String(index + 1).padStart(2, "0")}</span>
               <div>
                 <strong>{gap.title}</strong>
                 <p>{gap.suggested_action}</p>
@@ -534,8 +629,41 @@ function ReportView({ report, onDownload }: { report: SprintReport; onDownload: 
         </div>
       </section>
 
-      <section className="section-block">
-        <h3>面试冲刺计划</h3>
+      <section className="report-section">
+        <div className="section-kicker">
+          <MessageSquareText aria-hidden="true" size={17} />
+          <span>投递话术草稿</span>
+        </div>
+        <div className="draft-list">
+          {drafts.map((draft) => (
+            <article className="draft-card" key={draft.title}>
+              <strong>{draft.title}</strong>
+              <p>{draft.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="report-section">
+        <div className="section-kicker">
+          <BriefcaseBusiness aria-hidden="true" size={17} />
+          <span>Pipeline 下一步</span>
+        </div>
+        <div className="pipeline-row">
+          <Building2 aria-hidden="true" size={18} />
+          <div>
+            <strong>目标岗位 · 准备投递</strong>
+            <p>发送开场白，确认岗位仍在招聘，并用冲刺计划准备一面。</p>
+          </div>
+          <span>Today</span>
+        </div>
+      </section>
+
+      <section className="report-section">
+        <div className="section-kicker">
+          <ClipboardList aria-hidden="true" size={17} />
+          <span>面试冲刺计划</span>
+        </div>
         <div className="plan-list">
           {report.sprint_plan.map((day) => (
             <article className="plan-row" key={day.day}>
@@ -550,35 +678,11 @@ function ReportView({ report, onDownload }: { report: SprintReport; onDownload: 
         </div>
       </section>
 
-      <section className="section-block">
-        <h3>投递话术草稿</h3>
-        <div className="draft-list">
-          {drafts.map((draft) => (
-            <article className="draft-card" key={draft.title}>
-              <MessageSquareText aria-hidden="true" size={17} />
-              <div>
-                <strong>{draft.title}</strong>
-                <p>{draft.text}</p>
-              </div>
-            </article>
-          ))}
+      <section className="report-section">
+        <div className="section-kicker">
+          <ArrowRight aria-hidden="true" size={17} />
+          <span>高频追问</span>
         </div>
-      </section>
-
-      <section className="section-block">
-        <h3>Pipeline 下一步</h3>
-        <div className="pipeline-row">
-          <BriefcaseBusiness aria-hidden="true" size={18} />
-          <div>
-            <strong>目标岗位 · 准备投递</strong>
-            <p>下一步：发送开场白，确认岗位仍在招聘，并用冲刺计划准备一面。</p>
-          </div>
-          <span>Today</span>
-        </div>
-      </section>
-
-      <section className="section-block">
-        <h3>高频追问</h3>
         <ol className="question-list">
           {report.interview_questions.map((item) => (
             <li key={item.question}>
