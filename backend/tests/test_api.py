@@ -4,10 +4,19 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
-from app.main import app
+from app.main import agent, app
+from app.providers import FakeLLMProvider
 
 ROOT = Path(__file__).resolve().parents[2]
+
+@pytest.fixture(autouse=True)
+def reset_agent_provider():
+    agent.provider = FakeLLMProvider()
+    yield
+    agent.provider = FakeLLMProvider()
+
 
 
 def parse_sse(raw: str):
@@ -254,3 +263,95 @@ async def test_chat_api_complete_unlabeled_markdown_message_generates_report():
         assert report["role"] == "engineering"
         assert len(report["sprint_plan"]) == 5
         assert "## 高频追问" in report["markdown"]
+
+
+async def test_chat_api_warns_when_active_provider_has_no_api_key(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("LLM_PROVIDER=wanjie_ark\n")
+    monkeypatch.setenv("SPRINTDUCK_ENV_FILE", str(env_file))
+    for key in ("WANJIE_ARK_API_KEY", "wjark_api_key", "WJARK_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        assert "尚未配置 API Key" in created.json()["message"]
+
+        session_id = created.json()["session_id"]
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={"message": "简历：我做过 React 项目。"},
+        )
+        assert response.status_code == 200
+
+    events = parse_sse(response.text)
+    warning = next(data for event, data in events if event == "status")
+    assert "右上角齿轮" in warning["message"]
+
+
+async def test_llm_config_api_writes_wanjie_ark_env_without_returning_secret(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    monkeypatch.setenv("SPRINTDUCK_ENV_FILE", str(env_file))
+    for key in (
+        "LLM_PROVIDER",
+        "WANJIE_ARK_API_KEY",
+        "WANJIE_ARK_MODEL",
+        "WANJIE_ARK_BASE_URL",
+        "wjark_api_key",
+        "WJARK_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    secret = "test-wanjie-ark-secret"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.put(
+            "/api/llm/config",
+            json={
+                "provider": "wanjie_ark",
+                "api_key": secret,
+                "model": "glm-5.1",
+                "base_url": "https://maas-openapi.wanjiedata.com/api",
+            },
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        payload = json.dumps(data, ensure_ascii=False)
+        provider = next(item for item in data["providers"] if item["id"] == "wanjie_ark")
+        assert data["active_provider"] == "wanjie_ark"
+        assert provider["configured"] is True
+        assert provider["model"] == "glm-5.1"
+        assert provider["base_url"] == "https://maas-openapi.wanjiedata.com/api"
+        assert secret not in payload
+
+    env_text = env_file.read_text()
+    assert "LLM_PROVIDER=wanjie_ark" in env_text
+    assert f"WANJIE_ARK_API_KEY={secret}" in env_text
+
+
+async def test_llm_config_api_detects_lowercase_wjark_api_key(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("wjark_api_key=lowercase-secret\n")
+    monkeypatch.setenv("SPRINTDUCK_ENV_FILE", str(env_file))
+    for key in (
+        "LLM_PROVIDER",
+        "DEEPSEEK_API_KEY",
+        "deepseek_api_key",
+        "WANJIE_ARK_API_KEY",
+        "WJARK_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/llm/config")
+        assert response.status_code == 200
+
+    data = response.json()
+    payload = json.dumps(data, ensure_ascii=False)
+    provider = next(item for item in data["providers"] if item["id"] == "wanjie_ark")
+    assert data["active_provider"] == "wanjie_ark"
+    assert provider["configured"] is True
+    assert "lowercase-secret" not in payload

@@ -3,10 +3,14 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv, set_key
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class LLMProvider(Protocol):
@@ -18,12 +22,57 @@ class FakeLLMProvider:
         return None
 
 
-class DeepSeekProvider:
-    def __init__(self) -> None:
-        load_dotenv()
-        self.api_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("deepseek_api_key")
-        self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
-        self.base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+@dataclass(frozen=True)
+class ProviderSpec:
+    id: str
+    name: str
+    api_key_env: str
+    model_env: str
+    base_url_env: str
+    default_model: str
+    default_base_url: str
+    chat_completions_path: str
+    supports_response_format: bool = True
+    api_key_aliases: tuple[str, ...] = ()
+
+
+PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
+    ProviderSpec(
+        id="deepseek",
+        name="DeepSeek",
+        api_key_env="DEEPSEEK_API_KEY",
+        model_env="DEEPSEEK_MODEL",
+        base_url_env="DEEPSEEK_BASE_URL",
+        default_model="deepseek-v4-flash",
+        default_base_url="https://api.deepseek.com",
+        chat_completions_path="/chat/completions",
+        api_key_aliases=("deepseek_api_key",),
+    ),
+    ProviderSpec(
+        id="wanjie_ark",
+        name="万界方舟",
+        api_key_env="WANJIE_ARK_API_KEY",
+        model_env="WANJIE_ARK_MODEL",
+        base_url_env="WANJIE_ARK_BASE_URL",
+        default_model="glm-5.1",
+        default_base_url="https://maas-openapi.wanjiedata.com/api",
+        chat_completions_path="/v1/chat/completions",
+        supports_response_format=False,
+        api_key_aliases=("wjark_api_key", "WJARK_API_KEY"),
+    ),
+)
+PROVIDER_SPEC_BY_ID = {spec.id: spec for spec in PROVIDER_SPECS}
+
+
+class OpenAICompatibleProvider:
+    def __init__(self, spec: ProviderSpec) -> None:
+        env_file = _env_file()
+        load_dotenv(env_file, override=False)
+        values = _env_values(env_file)
+        self.spec = spec
+        self.api_key = _first_env((spec.api_key_env, *spec.api_key_aliases), values)
+        self.model = _env_value(spec.model_env, values, spec.default_model)
+        self.base_url = _env_value(spec.base_url_env, values, spec.default_base_url).rstrip("/")
 
     @property
     def configured(self) -> bool:
@@ -40,14 +89,125 @@ class DeepSeekProvider:
                 {"role": "user", "content": user},
             ],
             "temperature": 0.2,
-            "response_format": {"type": "json_object"},
         }
+        if self.spec.supports_response_format:
+            payload["response_format"] = {"type": "json_object"}
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=45) as client:
-            response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            response = await client.post(
+                _join_api_url(self.base_url, self.spec.chat_completions_path),
+                headers=headers,
+                json=payload,
+            )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
         return _parse_json_object(content)
+
+
+class DeepSeekProvider(OpenAICompatibleProvider):
+    def __init__(self) -> None:
+        super().__init__(PROVIDER_SPEC_BY_ID["deepseek"])
+
+
+def build_provider_from_env() -> LLMProvider:
+    values = _env_values(_env_file())
+    spec = PROVIDER_SPEC_BY_ID[_active_provider_id(values)]
+    return OpenAICompatibleProvider(spec)
+
+
+def llm_config_payload() -> dict[str, Any]:
+    values = _env_values(_env_file())
+    return {
+        "active_provider": _active_provider_id(values),
+        "providers": [_provider_payload(spec, values) for spec in PROVIDER_SPECS],
+    }
+
+
+def save_llm_config(provider: str, api_key: str | None, model: str | None, base_url: str | None) -> dict[str, Any]:
+    spec = PROVIDER_SPEC_BY_ID.get(provider)
+    if not spec:
+        raise ValueError("Unsupported provider")
+
+    env_file = _env_file()
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    env_file.touch(exist_ok=True)
+
+    updates = {"LLM_PROVIDER": spec.id}
+    if api_key and api_key.strip():
+        updates[spec.api_key_env] = api_key.strip()
+    if model and model.strip():
+        updates[spec.model_env] = model.strip()
+    if base_url and base_url.strip():
+        updates[spec.base_url_env] = base_url.strip().rstrip("/")
+
+    for key, value in updates.items():
+        set_key(str(env_file), key, value, quote_mode="never")
+        os.environ[key] = value
+
+    load_dotenv(env_file, override=True)
+    return llm_config_payload()
+
+
+def _provider_payload(spec: ProviderSpec, values: dict[str, str]) -> dict[str, Any]:
+    api_key = _first_env((spec.api_key_env, *spec.api_key_aliases), values)
+    return {
+        "id": spec.id,
+        "name": spec.name,
+        "api_key_env": spec.api_key_env,
+        "model_env": spec.model_env,
+        "base_url_env": spec.base_url_env,
+        "configured": bool(api_key),
+        "api_key_mask": _mask_secret(api_key),
+        "model": _env_value(spec.model_env, values, spec.default_model),
+        "base_url": _env_value(spec.base_url_env, values, spec.default_base_url),
+    }
+
+
+def _active_provider_id(values: dict[str, str]) -> str:
+    selected = _env_value("LLM_PROVIDER", values, "")
+    if selected in PROVIDER_SPEC_BY_ID:
+        return selected
+    for spec in PROVIDER_SPECS:
+        if _first_env((spec.api_key_env, *spec.api_key_aliases), values):
+            return spec.id
+    return "deepseek"
+
+
+def _env_file() -> Path:
+    return Path(os.getenv("SPRINTDUCK_ENV_FILE", str(REPO_ROOT / ".env")))
+
+
+def _env_values(env_file: Path) -> dict[str, str]:
+    if not env_file.exists():
+        return {}
+    return {key: value for key, value in dotenv_values(env_file).items() if value is not None}
+
+
+def _env_value(key: str, values: dict[str, str], default: str = "") -> str:
+    return os.getenv(key) or values.get(key) or default
+
+
+def _first_env(keys: tuple[str, ...], values: dict[str, str]) -> str:
+    for key in keys:
+        value = _env_value(key, values, "")
+        if value:
+            return value
+    return ""
+
+
+def _mask_secret(secret: str) -> str:
+    if not secret:
+        return ""
+    if len(secret) <= 8:
+        return "configured"
+    return f"{secret[:4]}...{secret[-4:]}"
+
+
+def _join_api_url(base_url: str, path: str) -> str:
+    if path.startswith("/v1/") and base_url.endswith("/v1"):
+        path = path[3:]
+    suffix = path if path.startswith("/") else f"/{path}"
+    return f"{base_url}{suffix}"
 
 
 def _parse_json_object(content: str) -> dict[str, Any] | None:
@@ -63,4 +223,3 @@ def _parse_json_object(content: str) -> dict[str, Any] | None:
             return parsed if isinstance(parsed, dict) else None
         except json.JSONDecodeError:
             return None
-

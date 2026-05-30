@@ -96,3 +96,26 @@ class HealthResponse(BaseModel):
     ok: bool
     service: str
 
+
+class LLMProviderConfig(BaseModel):
+    id: str
+    name: str
+    api_key_env: str
+    model_env: str
+    base_url_env: str
+    configured: bool
+    api_key_mask: str
+    model: str
+    base_url: str
+
+
+class LLMConfigResponse(BaseModel):
+    active_provider: str
+    providers: list[LLMProviderConfig]
+
+
+class UpdateLLMConfigRequest(BaseModel):
+    provider: str
+    api_key: str | None = None
+    model: str | None = None
+    base_url: str | None = None

@@ -49,6 +49,30 @@ export interface SessionResponse {
   missing: string[];
 }
 
+export interface LLMProviderConfig {
+  id: string;
+  name: string;
+  api_key_env: string;
+  model_env: string;
+  base_url_env: string;
+  configured: boolean;
+  api_key_mask: string;
+  model: string;
+  base_url: string;
+}
+
+export interface LLMConfigResponse {
+  active_provider: string;
+  providers: LLMProviderConfig[];
+}
+
+export interface UpdateLLMConfigPayload {
+  provider: string;
+  api_key?: string;
+  model?: string;
+  base_url?: string;
+}
+
 export interface StreamEvent {
   event: "status" | "assistant_delta" | "state" | "report" | "error" | "done";
   data: Record<string, unknown>;
@@ -59,4 +83,3 @@ export interface ChatLine {
   role: "user" | "assistant" | "status";
   text: string;
 }
-
