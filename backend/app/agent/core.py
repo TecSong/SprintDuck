@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import AsyncIterator
 
 from .harness import HarnessRun, IntentAnalysis, JobSearchHarness, ToolRegistry, default_registry
-from .markdown import render_report_markdown
-from .models import (
+from ..markdown import render_report_markdown
+from ..models import (
     ChatMessage,
     EvidenceItem,
     GapItem,
@@ -20,8 +20,8 @@ from .models import (
     SprintReport,
     SseEvent,
 )
-from .providers import LLMProvider
-from .role_presets import Criterion, infer_role, rubric_for
+from ..providers import LLMProvider
+from ..role_presets import Criterion, infer_role, rubric_for
 
 
 MISSING_LABELS = {
@@ -210,6 +210,7 @@ class SprintDuckAgent:
                 "id": step.id,
                 "purpose": step.purpose,
                 "tool": step.tool_name,
+                "skill": step.skill_name,
                 "risk_level": step.risk_level,
                 "requires_consent": step.requires_consent,
             }

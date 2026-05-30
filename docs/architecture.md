@@ -27,11 +27,13 @@ Provider + Harness Ports
 - `app.main`: FastAPI app, CORS, health endpoint, session/chat routes.
 - `app.models`: public Pydantic contracts for sessions, messages, report, plan, evidence, and SSE events.
 - `app.session_store`: in-memory session store.
-- `app.agent`: lightweight state machine and report orchestration.
+- `app.agent`: lightweight state machine, report orchestration, and the runtime agent harness package.
+- `app.agent.harness.runtime`: intent parsing, plan construction, skill dispatch, and summary assembly.
+- `app.agent.harness.tools`: deterministic callable tools such as JD parsing, evidence extraction, fit scoring, and message composition.
+- `app.agent.harness.skills`: higher-level job-search skills that compose tools into workflows.
 - `app.role_presets`: engineering/product/operations inference and criteria.
 - `app.providers`: LLM provider interface, fake provider, DeepSeek provider.
 - `app.markdown`: deterministic Markdown report rendering.
-- `app.harness`: future-facing tool and skill interfaces, registry, and no-op adapters.
 
 ## Frontend Modules
 

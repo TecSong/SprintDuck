@@ -189,6 +189,13 @@ AgentSkill
 
 Tool 是边界清晰的窄能力。Skill 组合多个 tool，形成可完成求职任务的高层行为。MCP adapter 对 planner 来说也表现为 tool，但必须额外声明能力边界：
 
+运行时代码应放在 backend agent 内部，而不是顶层 `tools/` 目录：
+
+- `backend/app/agent/core.py`：会话状态机和 Agent 入口。
+- `backend/app/agent/harness/runtime.py`：intent、plan、skill dispatch 和 summary。
+- `backend/app/agent/harness/tools/`：确定性 tool 实现。
+- `backend/app/agent/harness/skills/`：组合 tool 的 skill workflow。
+
 ```text
 McpAdapterSpec
   server_name
