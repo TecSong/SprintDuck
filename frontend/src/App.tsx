@@ -10,7 +10,6 @@ import {
   FileText,
   Gauge,
   KeyRound,
-  LockKeyhole,
   MessageSquareText,
   Save,
   Send,
@@ -338,39 +337,34 @@ export function App() {
         <section className="chat-panel" aria-label="实时对话">
           <header className="chat-head">
             <div>
-              <p className="eyebrow">REAL-TIME AGENT LOOP</p>
-              <h1>与求职 Agent 对话</h1>
-              <p>把简历、JD、目标公司和时间约束交给 Agent，右侧 Dashboard 会跟随输出实时更新。</p>
+              <p className="eyebrow">AGENT CHAT</p>
+              <h1>实时对话</h1>
             </div>
-            <button className="sample-button" type="button" onClick={loadDemoPrompt}>
-              <ClipboardList aria-hidden="true" size={16} />
-              <span>加载演示材料</span>
-            </button>
           </header>
 
-          <section className="privacy-panel" aria-label="privacy mode">
-            <div className="section-title">
-              <LockKeyhole aria-hidden="true" size={18} />
-              <div>
-                <strong>对话外发边界</strong>
-                <span>{egressSummary.detail}</span>
+          <details className="privacy-drawer">
+            <summary>
+              <ShieldCheck aria-hidden="true" size={16} />
+              <strong>{selectedPrivacyMode.label}</strong>
+              <span>{egressSummary.short}</span>
+            </summary>
+            <div className="privacy-drawer-body">
+              <div className="privacy-options" aria-label="privacy mode">
+                {PRIVACY_MODES.map((mode) => (
+                  <button
+                    className={`privacy-option ${privacyMode === mode.id ? "active" : ""}`}
+                    key={mode.id}
+                    title={mode.description}
+                    type="button"
+                    onClick={() => setPrivacyMode(mode.id)}
+                  >
+                    <span>{mode.label}</span>
+                  </button>
+                ))}
               </div>
+              <p>{egressSummary.detail} {selectedPrivacyMode.description}</p>
             </div>
-            <div className="privacy-options">
-              {PRIVACY_MODES.map((mode) => (
-                <button
-                  className={`privacy-option ${privacyMode === mode.id ? "active" : ""}`}
-                  key={mode.id}
-                  title={mode.description}
-                  type="button"
-                  onClick={() => setPrivacyMode(mode.id)}
-                >
-                  <span>{mode.label}</span>
-                </button>
-              ))}
-            </div>
-            <p>{selectedPrivacyMode.description}</p>
-          </section>
+          </details>
 
           <div className="transcript">
             {lines.map((line) => (
@@ -386,7 +380,7 @@ export function App() {
           </div>
 
           <form className="composer" onSubmit={handleSubmit}>
-            <label className="composer-label" htmlFor="job-context">
+            <label className="composer-label sr-only" htmlFor="job-context">
               候选人资料 / 目标 JD / 约束
             </label>
             <textarea
@@ -397,17 +391,23 @@ export function App() {
               onChange={(event) => setDraft(event.target.value)}
             />
             <div className="composer-actions">
-              <label className="file-button">
-                <Upload aria-hidden="true" size={17} />
-                <span>{files.length ? `${files.length} 个文本文件` : "上传 .txt/.md"}</span>
-                <input
-                  ref={fileRef}
-                  accept=".txt,.md,.markdown,text/plain,text/markdown"
-                  multiple
-                  type="file"
-                  onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-                />
-              </label>
+              <div className="composer-tools">
+                <button className="sample-button" type="button" onClick={loadDemoPrompt}>
+                  <ClipboardList aria-hidden="true" size={16} />
+                  <span>演示材料</span>
+                </button>
+                <label className="file-button">
+                  <Upload aria-hidden="true" size={17} />
+                  <span>{files.length ? `${files.length} 个文本文件` : "上传 .txt/.md"}</span>
+                  <input
+                    ref={fileRef}
+                    accept=".txt,.md,.markdown,text/plain,text/markdown"
+                    multiple
+                    type="file"
+                    onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+                  />
+                </label>
+              </div>
               <button className="send-button" disabled={!canSend} type="submit">
                 <span>{pending ? "处理中" : "生成可信闭环"}</span>
                 <Send aria-hidden="true" size={17} />
