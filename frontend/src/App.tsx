@@ -12,7 +12,6 @@ import {
   KeyRound,
   LockKeyhole,
   MessageSquareText,
-  Network,
   Save,
   Send,
   Settings,
@@ -26,6 +25,7 @@ import { createSession, getLLMConfig, sendMessage, updateLLMConfig } from "./api
 import { ChatLine, LLMConfigResponse, LLMProviderConfig, SprintReport, StreamEvent } from "./types";
 
 type PrivacyModeId = "local" | "redacted" | "full";
+type DashboardMode = "collecting" | "processing" | "ready";
 
 const PRIVACY_MODES: Array<{
   id: PrivacyModeId;
@@ -81,14 +81,7 @@ JD：
 每天可投入时间：90 分钟
 当前求职阶段：准备投递并争取一面机会`;
 
-const WORKFLOW_STAGES = ["发现岗位", "匹配诊断", "简历优化", "投递沟通", "面试冲刺", "Offer 谈判"];
-
-const SKILL_SURFACE = [
-  { name: "resume_optimizer", target: "简历证据与岗位改写" },
-  { name: "company_researcher", target: "公司背调与风险信号" },
-  { name: "interview_sprint", target: "1-7 天面试冲刺" },
-  { name: "platform_connector", target: "Boss / 脉脉 · 授权后执行" }
-];
+const JOB_STAGES = ["岗位发现", "匹配诊断", "简历优化", "投递沟通", "面试冲刺", "Offer 谈判"];
 
 export function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -342,20 +335,24 @@ export function App() {
       </header>
 
       <section className="workspace">
-        <aside className="left-rail" aria-label="Job command center">
-          <section className="mission-panel">
-            <p className="eyebrow">JOB SEARCH WORKBENCH / CHINA MARKET</p>
-            <h1>从岗位发现到 Offer 的行动工作台</h1>
-            <p>
-              本地组织简历、JD、公司资料和投递上下文；外部模型和平台连接只在用户看清数据边界后执行。
-            </p>
-          </section>
+        <section className="chat-panel" aria-label="实时对话">
+          <header className="chat-head">
+            <div>
+              <p className="eyebrow">REAL-TIME AGENT LOOP</p>
+              <h1>与求职 Agent 对话</h1>
+              <p>把简历、JD、目标公司和时间约束交给 Agent，右侧 Dashboard 会跟随输出实时更新。</p>
+            </div>
+            <button className="sample-button" type="button" onClick={loadDemoPrompt}>
+              <ClipboardList aria-hidden="true" size={16} />
+              <span>加载演示材料</span>
+            </button>
+          </header>
 
           <section className="privacy-panel" aria-label="privacy mode">
             <div className="section-title">
               <LockKeyhole aria-hidden="true" size={18} />
               <div>
-                <strong>外发控制台</strong>
+                <strong>对话外发边界</strong>
                 <span>{egressSummary.detail}</span>
               </div>
             </div>
@@ -374,62 +371,6 @@ export function App() {
             </div>
             <p>{selectedPrivacyMode.description}</p>
           </section>
-
-          <section className="chain-panel" aria-label="job chain">
-            <div className="section-title">
-              <Workflow aria-hidden="true" size={18} />
-              <div>
-                <strong>求职链路</strong>
-                <span>Agent 负责判断与草稿，高影响动作由用户确认。</span>
-              </div>
-            </div>
-            <ol className="chain-list">
-              {WORKFLOW_STAGES.map((stage, index) => (
-                <li className={index === 2 ? "active" : ""} key={stage}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{stage}</strong>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <section className="surface-panel" aria-label="skills and mcps">
-            <div className="section-title">
-              <Network aria-hidden="true" size={18} />
-              <div>
-                <strong>Skills / MCP 边界</strong>
-                <span>本地优先，连接器授权后再行动。</span>
-              </div>
-            </div>
-            <div className="skill-grid">
-              {SKILL_SURFACE.map((skill) => (
-                <article key={skill.name}>
-                  <span>{skill.name}</span>
-                  <p>{skill.target}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        </aside>
-
-        <section className="workbench-panel" aria-label="Agent workspace">
-          <header className="panel-head">
-            <div>
-              <p className="eyebrow">CURRENT LOOP / RESUME + JD</p>
-              <h2>先跑通可信诊断，再进入投递与面试行动。</h2>
-            </div>
-            <button className="sample-button" type="button" onClick={loadDemoPrompt}>
-              <ClipboardList aria-hidden="true" size={16} />
-              <span>加载演示材料</span>
-            </button>
-          </header>
-
-          <div className="context-strip" aria-label="missing context">
-            <span className="context-label">缺失上下文</span>
-            <div>
-              {missing.length ? missing.map((item) => <span key={item}>{item}</span>) : <span>上下文已满足报告生成要求</span>}
-            </div>
-          </div>
 
           <div className="transcript">
             {lines.map((line) => (
@@ -475,9 +416,7 @@ export function App() {
           </form>
         </section>
 
-        <section className="report-panel" aria-label="Sprint report">
-          {!report ? <EmptyReport /> : <ReportView report={report} onDownload={downloadMarkdown} />}
-        </section>
+        <JobDashboard report={report} missing={missing} pending={pending} onDownload={downloadMarkdown} />
       </section>
     </main>
   );
@@ -545,153 +484,253 @@ function applicationDrafts(report: SprintReport) {
   ];
 }
 
-function EmptyReport() {
-  return (
-    <div className="empty-report">
-      <div className="empty-mark" aria-hidden="true">
-        <FileText size={30} />
-      </div>
-      <p className="eyebrow">WAITING FOR TRUSTED LOOP</p>
-      <h2>等待首个求职诊断</h2>
-      <p>
-        发送简历和目标 JD 后，这里会生成一份可行动报告：匹配差距、简历改写、投递话术、面试冲刺和下一步 Pipeline。
-      </p>
-      <div className="empty-grid">
-        <span>JD 匹配</span>
-        <span>简历证据</span>
-        <span>投递草稿</span>
-        <span>面试冲刺</span>
-      </div>
-    </div>
-  );
+function buildDashboardState(report: SprintReport | null, missing: string[], pending: boolean) {
+  if (report) {
+    const stageIndex = report.readiness_score >= 80 ? 3 : 2;
+    return {
+      mode: "ready" as DashboardMode,
+      stageIndex,
+      stage: JOB_STAGES[stageIndex],
+      title: `匹配度 ${report.readiness_score}/100 · ${report.readiness_band}`,
+      description: report.summary,
+      signal: "Agent 输出已写入面板"
+    };
+  }
+
+  if (pending) {
+    return {
+      mode: "processing" as DashboardMode,
+      stageIndex: 1,
+      stage: JOB_STAGES[1],
+      title: "Agent 正在分析简历与 JD",
+      description: "Dashboard 会在流式结果到达后切换为差距、行动、投递和面试模块。",
+      signal: "实时生成中"
+    };
+  }
+
+  return {
+    mode: "collecting" as DashboardMode,
+    stageIndex: 0,
+    stage: JOB_STAGES[0],
+    title: missing.length ? `还缺 ${missing.length} 类上下文` : "上下文已满足",
+    description: missing.length ? "补齐材料后即可进入匹配诊断。" : "可以开始生成求职诊断。",
+    signal: "等待输入"
+  };
 }
 
-function ReportView({ report, onDownload }: { report: SprintReport; onDownload: () => void }) {
-  const drafts = applicationDrafts(report);
+function JobDashboard({
+  report,
+  missing,
+  pending,
+  onDownload
+}: {
+  report: SprintReport | null;
+  missing: string[];
+  pending: boolean;
+  onDownload: () => void;
+}) {
+  const dashboard = buildDashboardState(report, missing, pending);
+  const drafts = report ? applicationDrafts(report) : [];
+  const requiredContext = missing.length
+    ? missing
+    : ["简历材料", "目标岗位 JD", "关键日期", "每天可投入时间", "当前求职阶段"];
+
   return (
-    <div className="report">
-      <header className="report-head">
-        <div className="score-block">
-          <span>Job Fit Readiness</span>
-          <strong>{report.readiness_score}</strong>
-          <small>/100</small>
+    <section className={`dashboard-panel ${dashboard.mode}`} aria-label="求职 Dashboard">
+      <header className="dashboard-head">
+        <div>
+          <p className="eyebrow">JOB DASHBOARD / {dashboard.stage}</p>
+          <h2>{dashboard.title}</h2>
+          <p>{dashboard.description}</p>
         </div>
-        <div className="report-head-copy">
-          <p className="eyebrow">DIAGNOSIS / {roleLabel(report.role)}</p>
-          <h2>{report.summary}</h2>
-          <div className="metric-row">
-            <span>{report.readiness_band}</span>
-            <span>证据覆盖率 {(report.evidence_coverage * 100).toFixed(0)}%</span>
-            <span>信心 {report.confidence}</span>
+        {report ? (
+          <button className="download-button" type="button" onClick={onDownload}>
+            <Download aria-hidden="true" size={17} />
+            <span>导出 Markdown</span>
+          </button>
+        ) : (
+          <div className="dashboard-state-chip">
+            <Workflow aria-hidden="true" size={17} />
+            <span>{dashboard.signal}</span>
           </div>
-        </div>
-        <button className="download-button" type="button" onClick={onDownload}>
-          <Download aria-hidden="true" size={17} />
-          <span>导出 Markdown</span>
-        </button>
+        )}
       </header>
 
-      <section className="report-section">
-        <div className="section-kicker">
-          <Gauge aria-hidden="true" size={17} />
-          <span>JD 匹配差距</span>
-        </div>
-        <div className="gap-list">
-          {report.top_gaps.map((gap) => (
-            <article className="gap-card" key={gap.title}>
-              <header>
-                <strong>{gap.title}</strong>
-                <span className={`severity ${gap.severity}`}>{gap.severity}</span>
-              </header>
-              <p>{gap.gap_reason}</p>
-              <small>证据：{gap.evidence.map((item) => item.text).join("；")}</small>
-              <small>行动：{gap.suggested_action}</small>
-            </article>
-          ))}
-        </div>
-      </section>
+      <ol className="stage-rail" aria-label="求职环节">
+        {JOB_STAGES.map((stage, index) => (
+          <li className={index === dashboard.stageIndex ? "active" : index < dashboard.stageIndex ? "done" : ""} key={stage}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <strong>{stage}</strong>
+          </li>
+        ))}
+      </ol>
 
-      <section className="report-section">
-        <div className="section-kicker">
-          <FilePenLine aria-hidden="true" size={17} />
-          <span>简历优化优先级</span>
-        </div>
-        <div className="action-list">
-          {report.top_gaps.slice(0, 3).map((gap, index) => (
-            <article className="action-row" key={gap.title}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <strong>{gap.title}</strong>
-                <p>{gap.suggested_action}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="report-section">
-        <div className="section-kicker">
-          <MessageSquareText aria-hidden="true" size={17} />
-          <span>投递话术草稿</span>
-        </div>
-        <div className="draft-list">
-          {drafts.map((draft) => (
-            <article className="draft-card" key={draft.title}>
-              <strong>{draft.title}</strong>
-              <p>{draft.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="report-section">
-        <div className="section-kicker">
-          <BriefcaseBusiness aria-hidden="true" size={17} />
-          <span>Pipeline 下一步</span>
-        </div>
-        <div className="pipeline-row">
-          <Building2 aria-hidden="true" size={18} />
-          <div>
-            <strong>目标岗位 · 准备投递</strong>
-            <p>发送开场白，确认岗位仍在招聘，并用冲刺计划准备一面。</p>
+      <section className="dashboard-hero" aria-live="polite">
+        {report ? (
+          <div className="score-block">
+            <span>Job Fit Readiness</span>
+            <strong>{report.readiness_score}</strong>
+            <small>/100</small>
           </div>
-          <span>Today</span>
+        ) : (
+          <div className="dashboard-counter">
+            <FileText aria-hidden="true" size={28} />
+            <strong>{pending ? "..." : requiredContext.length}</strong>
+            <span>{pending ? "生成中" : "待补上下文"}</span>
+          </div>
+        )}
+        <div className="dashboard-hero-copy">
+          <p className="eyebrow">{report ? `DIAGNOSIS / ${roleLabel(report.role)}` : "LIVE STATE"}</p>
+          <h3>{dashboard.signal}</h3>
+          {report ? (
+            <div className="metric-row">
+              <span>{report.readiness_band}</span>
+              <span>证据覆盖率 {(report.evidence_coverage * 100).toFixed(0)}%</span>
+              <span>信心 {report.confidence}</span>
+            </div>
+          ) : (
+            <p>{dashboard.description}</p>
+          )}
         </div>
       </section>
 
-      <section className="report-section">
-        <div className="section-kicker">
-          <ClipboardList aria-hidden="true" size={17} />
-          <span>面试冲刺计划</span>
-        </div>
-        <div className="plan-list">
-          {report.sprint_plan.map((day) => (
-            <article className="plan-row" key={day.day}>
-              <span>Day {day.day}</span>
-              <div>
-                <strong>{day.focus}</strong>
-                <p>{day.tasks[0]}</p>
-                <small>{day.minutes} 分钟 · {day.done_criteria}</small>
+      <div className="dynamic-stack">
+        {!report ? (
+          <>
+            <section className="dashboard-section">
+              <div className="section-kicker">
+                <FileText aria-hidden="true" size={17} />
+                <span>当前需要的上下文</span>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+              <div className="context-grid">
+                {requiredContext.map((item) => (
+                  <span className={missing.length ? "needed" : "ready"} key={item}>
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </section>
+            <section className="dashboard-section">
+              <div className="section-kicker">
+                <Gauge aria-hidden="true" size={17} />
+                <span>待生成模块</span>
+              </div>
+              <div className="signal-list">
+                <span>JD 匹配差距</span>
+                <span>简历证据补强</span>
+                <span>投递话术</span>
+                <span>面试冲刺计划</span>
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <section className="dashboard-section">
+              <div className="section-kicker">
+                <Gauge aria-hidden="true" size={17} />
+                <span>简历与 JD 差距</span>
+              </div>
+              <div className="gap-list">
+                {report.top_gaps.map((gap) => (
+                  <article className="gap-card" key={gap.title}>
+                    <header>
+                      <strong>{gap.title}</strong>
+                      <span className={`severity ${gap.severity}`}>{gap.severity}</span>
+                    </header>
+                    <p>{gap.gap_reason}</p>
+                    <small>证据：{gap.evidence.map((item) => item.text).join("；")}</small>
+                    <small>行动：{gap.suggested_action}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
 
-      <section className="report-section">
-        <div className="section-kicker">
-          <ArrowRight aria-hidden="true" size={17} />
-          <span>高频追问</span>
-        </div>
-        <ol className="question-list">
-          {report.interview_questions.map((item) => (
-            <li key={item.question}>
-              <strong>{item.question}</strong>
-              <span>{item.why_it_matters}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </div>
+            <section className="dashboard-section">
+              <div className="section-kicker">
+                <FilePenLine aria-hidden="true" size={17} />
+                <span>简历优化优先级</span>
+              </div>
+              <div className="action-list">
+                {report.top_gaps.slice(0, 3).map((gap, index) => (
+                  <article className="action-row" key={gap.title}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <div>
+                      <strong>{gap.title}</strong>
+                      <p>{gap.suggested_action}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="dashboard-section scenario-apply">
+              <div className="section-kicker">
+                <MessageSquareText aria-hidden="true" size={17} />
+                <span>投递话术草稿</span>
+              </div>
+              <div className="draft-list">
+                {drafts.map((draft) => (
+                  <article className="draft-card" key={draft.title}>
+                    <strong>{draft.title}</strong>
+                    <p>{draft.text}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="dashboard-section">
+              <div className="section-kicker">
+                <BriefcaseBusiness aria-hidden="true" size={17} />
+                <span>Pipeline 下一步</span>
+              </div>
+              <div className="pipeline-row">
+                <Building2 aria-hidden="true" size={18} />
+                <div>
+                  <strong>目标岗位 · 准备投递</strong>
+                  <p>发送开场白，确认岗位仍在招聘，并用冲刺计划准备一面。</p>
+                </div>
+                <span>Today</span>
+              </div>
+            </section>
+
+            <section className="dashboard-section scenario-interview">
+              <div className="section-kicker">
+                <ClipboardList aria-hidden="true" size={17} />
+                <span>面试冲刺计划</span>
+              </div>
+              <div className="plan-list">
+                {report.sprint_plan.map((day) => (
+                  <article className="plan-row" key={day.day}>
+                    <span>Day {day.day}</span>
+                    <div>
+                      <strong>{day.focus}</strong>
+                      <p>{day.tasks[0]}</p>
+                      <small>
+                        {day.minutes} 分钟 · {day.done_criteria}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="dashboard-section">
+              <div className="section-kicker">
+                <ArrowRight aria-hidden="true" size={17} />
+                <span>高频追问</span>
+              </div>
+              <ol className="question-list">
+                {report.interview_questions.map((item) => (
+                  <li key={item.question}>
+                    <strong>{item.question}</strong>
+                    <span>{item.why_it_matters}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
