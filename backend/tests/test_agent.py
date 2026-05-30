@@ -86,3 +86,61 @@ async def test_agent_limits_plan_to_seven_days_for_longer_deadline():
     assert session.report is not None
     assert session.report.role == "product"
     assert len(session.report.sprint_plan) == 7
+
+
+async def test_agent_runs_minimal_harness_for_jd_match_and_message():
+    agent = SprintDuckAgent(FakeLLMProvider())
+    session = SessionState(session_id="s4")
+
+    events = await collect(
+        agent,
+        session,
+        (
+            "帮我判断这个岗位值不值得投，并写一段 Boss 开场白。\n\n"
+            "简历：我是一名 4 年经验的全栈工程师，主要使用 TypeScript、React、Node.js 和 PostgreSQL。"
+            "负责过 B2B SaaS 权限系统、报表模块和内部自动化平台。最近项目中我把页面加载时间从 4.2s 优化到 1.8s，"
+            "并推动前端组件库重构。我有基础 Docker 使用经验，但没有主导过 Kubernetes 或大型系统设计评审。\n\n"
+            "JD：岗位：Senior Fullstack Engineer。要求：5年以上经验，熟悉 React、Node.js、PostgreSQL，"
+            "能够设计可扩展后端服务。需要性能优化经验、跨团队沟通能力、英文技术文档阅读能力。"
+            "加分项：Kubernetes、系统设计、带领小团队。"
+        ),
+    )
+
+    names = event_names(events)
+    assert "report" not in names
+    assert session.status == "report_ready"
+    assert session.report is None
+
+    state = next(event.data for event in events if event.event == "state")
+    assistant_reply = "".join(str(event.data["text"]) for event in events if event.event == "assistant_delta")
+    assert state["intent"]["primary_intent"] == "jd_match"
+    assert state["intent"]["secondary_intents"] == ["application_message"]
+    assert [step["tool"] for step in state["plan"]] == ["jd.parse", "evidence.extract", "fit.score", "message.compose"]
+    assert [result["tool"] for result in state["tool_results"]] == ["jd.parse", "evidence.extract", "fit.score", "message.compose"]
+    assert state["artifact"]["fit"]["priority"] in {"建议投递", "谨慎投递", "低优先级"}
+    assert "意图分析" in assistant_reply
+    assert "推理执行" in assistant_reply
+    assert "开场白草稿" in assistant_reply
+    assert "不会自动发送或投递" in assistant_reply
+
+
+async def test_agent_harness_asks_for_missing_required_context():
+    agent = SprintDuckAgent(FakeLLMProvider())
+    session = SessionState(session_id="s5")
+
+    events = await collect(
+        agent,
+        session,
+        (
+            "帮我判断这个岗位要不要投。"
+            "JD：岗位：增长产品经理。要求：负责增长漏斗分析、A/B 测试、用户分层和商业化转化策略。"
+            "需要能写清楚 PRD，与设计、研发、运营协作，并用数据评估上线效果。"
+        ),
+    )
+
+    state = next(event.data for event in events if event.event == "state")
+    assistant_reply = "".join(str(event.data["text"]) for event in events if event.event == "assistant_delta")
+    assert state["intent"]["primary_intent"] == "jd_match"
+    assert state["intent"]["missing_context"] == ["resume"]
+    assert "简历材料" in assistant_reply
+    assert session.report is None
