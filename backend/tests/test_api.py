@@ -50,6 +50,21 @@ def parse_sse(raw: str):
     return events
 
 
+async def test_local_vite_fallback_port_is_allowed_by_cors():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.options(
+            "/api/chat/sessions",
+            headers={
+                "Origin": "http://127.0.0.1:5174",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5174"
+
+
 async def test_chat_api_streams_state_and_report():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
