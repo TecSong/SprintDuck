@@ -99,7 +99,7 @@ SSE event names:
 
 Supported variables:
 
-- `LLM_PROVIDER`, default `deepseek`
+- `LLM_PROVIDER`, default `wanjie_ark`
 - DeepSeek: `DEEPSEEK_API_KEY` or `deepseek_api_key`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`
 - 万界方舟: `WANJIE_ARK_API_KEY` or `wjark_api_key` or `WJARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
 

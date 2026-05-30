@@ -19,7 +19,7 @@ Frontend: `http://127.0.0.1:5173`
 
 Copy `.env.example` to `.env`, or use the model configuration panel in the web app. The panel writes API keys to the local `.env` file and does not send them to the browser after saving.
 
-Select the active provider with `LLM_PROVIDER`:
+Select the active provider with `LLM_PROVIDER`; the default is `wanjie_ark`.
 
 - `deepseek`: `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`
 - `wanjie_ark`: `WANJIE_ARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`

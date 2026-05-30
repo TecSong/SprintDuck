@@ -355,3 +355,26 @@ async def test_llm_config_api_detects_lowercase_wjark_api_key(tmp_path, monkeypa
     assert data["active_provider"] == "wanjie_ark"
     assert provider["configured"] is True
     assert "lowercase-secret" not in payload
+
+
+async def test_llm_config_defaults_to_wanjie_ark_without_explicit_provider(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("deepseek_api_key=deepseek-secret\nwjark_api_key=wjark-secret\n")
+    monkeypatch.setenv("SPRINTDUCK_ENV_FILE", str(env_file))
+    for key in (
+        "LLM_PROVIDER",
+        "DEEPSEEK_API_KEY",
+        "deepseek_api_key",
+        "WANJIE_ARK_API_KEY",
+        "wjark_api_key",
+        "WJARK_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/llm/config")
+        assert response.status_code == 200
+
+    data = response.json()
+    assert data["active_provider"] == "wanjie_ark"
