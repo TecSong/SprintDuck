@@ -42,4 +42,5 @@ make test-real
 - `docs/architecture.md`
 - `docs/prototype-ui.md`
 - `docs/harness-design.md`
+- `docs/agent-refactor-plan.md`
 - `docs/test-cases.md`
