@@ -26,28 +26,6 @@ import { ChatLine, LLMConfigResponse, LLMProviderConfig, SprintReport, StreamEve
 type PrivacyModeId = "local" | "redacted" | "full";
 type DashboardMode = "collecting" | "processing" | "ready";
 
-const PRIVACY_MODES: Array<{
-  id: PrivacyModeId;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: "redacted",
-    label: "脱敏外发",
-    description: "默认推荐。发送前脱敏手机号、邮箱、微信等直接身份信息。"
-  },
-  {
-    id: "local",
-    label: "纯本地",
-    description: "不允许调用已配置的外部模型，适合隐私敏感材料。"
-  },
-  {
-    id: "full",
-    label: "完整外发",
-    description: "发送完整上下文给当前模型服务商，换取更完整的表达优化。"
-  }
-];
-
 const DEMO_PROMPT = `简历：
 姓名：王晓夏
 手机：13812345678
@@ -98,7 +76,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [report, setReport] = useState<SprintReport | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
-  const [privacyMode, setPrivacyMode] = useState<PrivacyModeId>("redacted");
+  const [privacyMode] = useState<PrivacyModeId>("redacted");
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -123,7 +101,6 @@ export function App() {
     [config, selectedProviderId]
   );
   const providerConfigured = Boolean(selectedProvider?.configured);
-  const selectedPrivacyMode = PRIVACY_MODES.find((mode) => mode.id === privacyMode) ?? PRIVACY_MODES[0];
   const egressSummary = privacyEgressSummary(privacyMode, selectedProvider, providerConfigured);
 
   const syncConfigForm = (nextConfig: LLMConfigResponse, providerId: string) => {
@@ -335,37 +312,6 @@ export function App() {
 
       <section className="workspace">
         <section className="chat-panel" aria-label="实时对话">
-          <header className="chat-head">
-            <div>
-              <p className="eyebrow">AGENT CHAT</p>
-              <h1>实时对话</h1>
-            </div>
-          </header>
-
-          <details className="privacy-drawer">
-            <summary>
-              <ShieldCheck aria-hidden="true" size={16} />
-              <strong>{selectedPrivacyMode.label}</strong>
-              <span>{egressSummary.short}</span>
-            </summary>
-            <div className="privacy-drawer-body">
-              <div className="privacy-options" aria-label="privacy mode">
-                {PRIVACY_MODES.map((mode) => (
-                  <button
-                    className={`privacy-option ${privacyMode === mode.id ? "active" : ""}`}
-                    key={mode.id}
-                    title={mode.description}
-                    type="button"
-                    onClick={() => setPrivacyMode(mode.id)}
-                  >
-                    <span>{mode.label}</span>
-                  </button>
-                ))}
-              </div>
-              <p>{egressSummary.detail} {selectedPrivacyMode.description}</p>
-            </div>
-          </details>
-
           <div className="transcript">
             {lines.map((line) => (
               <article className={`bubble ${line.role}`} key={line.id}>

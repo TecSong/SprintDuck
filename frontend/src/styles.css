@@ -92,7 +92,6 @@ textarea:focus-visible {
 .status-chip,
 .settings-title,
 .config-state,
-.chat-head,
 .dashboard-state-chip,
 .composer-actions,
 .pipeline-row {
@@ -140,7 +139,6 @@ textarea:focus-visible {
 .score-block span,
 .score-block small,
 .dashboard-counter span,
-.privacy-drawer summary strong,
 .plan-row > span,
 .pipeline-row > span {
   font-family: var(--mono);
@@ -158,8 +156,6 @@ textarea:focus-visible {
 .score-block span,
 .score-block small,
 .dashboard-counter span,
-.privacy-drawer p,
-.privacy-drawer summary span,
 .dashboard-head p,
 .dashboard-hero-copy p,
 .bubble.status,
@@ -206,8 +202,7 @@ textarea:focus-visible {
 .file-button,
 .send-button,
 .download-button,
-.save-config-button,
-.privacy-option {
+.save-config-button {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 0;
@@ -243,8 +238,7 @@ textarea:focus-visible {
 .close-settings-button:hover,
 .sample-button:hover,
 .file-button:hover,
-.download-button:hover,
-.privacy-option:hover {
+.download-button:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -369,7 +363,6 @@ textarea:focus-visible {
   min-height: calc(100vh - 120px);
 }
 
-.chat-head,
 .composer,
 .dashboard-head,
 .dashboard-hero,
@@ -380,25 +373,8 @@ textarea:focus-visible {
 
 .chat-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(320px, 1fr) auto;
+  grid-template-rows: minmax(360px, 1fr) auto;
   overflow: hidden;
-}
-
-.chat-head {
-  align-items: center;
-  display: flex;
-  min-height: 62px;
-  padding-bottom: 12px;
-  padding-top: 12px;
-  justify-content: space-between;
-}
-
-.chat-head h1 {
-  font-size: 24px;
-  font-weight: 420;
-  letter-spacing: 0;
-  line-height: 1.05;
-  margin: 2px 0 0;
 }
 
 .sample-button {
@@ -406,75 +382,6 @@ textarea:focus-visible {
   color: var(--ink);
   flex: 0 0 auto;
   padding: 0 14px;
-}
-
-.privacy-drawer {
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.privacy-drawer summary {
-  align-items: center;
-  cursor: pointer;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  min-height: 42px;
-  padding: 0 20px;
-}
-
-.privacy-drawer summary::-webkit-details-marker {
-  display: none;
-}
-
-.privacy-drawer summary svg {
-  color: var(--accent);
-}
-
-.privacy-drawer summary strong,
-.privacy-drawer summary span {
-  min-width: 0;
-}
-
-.privacy-drawer summary span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.privacy-drawer[open] summary {
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.privacy-drawer-body {
-  background: color-mix(in srgb, var(--paper-2) 72%, var(--paper));
-  display: grid;
-  gap: 12px;
-  padding: 12px 20px 14px;
-}
-
-.privacy-options {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.privacy-option {
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 13px;
-  min-height: 40px;
-  padding: 0 8px;
-}
-
-.privacy-option.active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-}
-
-.privacy-drawer p {
-  font-size: 13px;
-  margin: 0;
 }
 
 .transcript {
@@ -963,10 +870,6 @@ textarea:focus-visible {
     min-height: auto;
   }
 
-  .chat-head {
-    min-height: 58px;
-  }
-
   .sample-button,
   .send-button,
   .file-button {
@@ -983,12 +886,8 @@ textarea:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .privacy-options {
-    grid-template-columns: 1fr;
-  }
-
   .chat-panel {
-    grid-template-rows: auto auto minmax(280px, 52vh) auto;
+    grid-template-rows: minmax(280px, 52vh) auto;
   }
 
   .dashboard-head,
@@ -1051,7 +950,6 @@ textarea:focus-visible {
     display: none;
   }
 
-  .chat-head,
   .composer,
   .dashboard-head,
   .dashboard-hero,
@@ -1059,15 +957,6 @@ textarea:focus-visible {
     padding: 16px;
   }
 
-  .privacy-drawer summary {
-    padding: 0 16px;
-  }
-
-  .privacy-drawer-body {
-    padding: 12px 16px 14px;
-  }
-
-  .chat-head h1,
   .dashboard-head h2,
   .dashboard-hero-copy h3 {
     max-width: none;
