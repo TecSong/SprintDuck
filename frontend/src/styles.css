@@ -90,8 +90,6 @@ textarea:focus-visible {
 .brand-lockup,
 .command-status,
 .status-chip,
-.settings-title,
-.config-state,
 .dashboard-state-chip,
 .composer-actions,
 .pipeline-row {
@@ -128,9 +126,6 @@ textarea:focus-visible {
 .eyebrow,
 .status-chip,
 .section-kicker,
-.settings-title span,
-.settings-form label > span,
-.config-state,
 .metric-row,
 .dashboard-state-chip,
 .stage-rail span,
@@ -150,8 +145,6 @@ textarea:focus-visible {
 
 .brand-lockup span,
 .status-chip,
-.settings-title span,
-.config-state,
 .metric-row,
 .score-block span,
 .score-block small,
@@ -164,8 +157,7 @@ textarea:focus-visible {
 .plan-row small,
 .question-list span,
 .draft-card p,
-.pipeline-row p,
-.settings-form label > span {
+.pipeline-row p {
   color: var(--helper);
 }
 
@@ -180,10 +172,6 @@ textarea:focus-visible {
   padding-left: 12px;
 }
 
-.settings-menu {
-  position: relative;
-}
-
 .sr-only {
   border: 0;
   clip: rect(0 0 0 0);
@@ -196,13 +184,10 @@ textarea:focus-visible {
   width: 1px;
 }
 
-.settings-trigger,
-.close-settings-button,
 .sample-button,
 .file-button,
 .send-button,
-.download-button,
-.save-config-button {
+.download-button {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 0;
@@ -218,24 +203,6 @@ textarea:focus-visible {
     transform 160ms ease;
 }
 
-.settings-trigger,
-.close-settings-button {
-  background: var(--paper);
-  color: var(--ink);
-  height: 42px;
-  width: 42px;
-}
-
-.settings-trigger.ready {
-  border-color: var(--success);
-}
-
-.settings-trigger.needs-config {
-  border-color: var(--warn);
-}
-
-.settings-trigger:hover,
-.close-settings-button:hover,
 .sample-button:hover,
 .file-button:hover,
 .download-button:hover {
@@ -243,7 +210,6 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
-.settings-trigger:active,
 .sample-button:active,
 .send-button:active,
 .download-button:active,
@@ -251,103 +217,22 @@ textarea:focus-visible {
   transform: translateY(1px);
 }
 
-.settings-popover {
-  background: var(--paper);
-  border: 1px solid var(--ink);
-  display: grid;
-  gap: 16px;
-  padding: 16px;
-  position: absolute;
-  right: 0;
-  top: 52px;
-  width: min(440px, calc(100vw - 32px));
-  z-index: 20;
-}
-
-.settings-title {
-  gap: 16px;
-  justify-content: space-between;
-}
-
-.settings-title strong {
-  display: block;
-}
-
-.settings-form {
-  display: grid;
-  gap: 12px;
-}
-
-.settings-form label {
-  display: grid;
-  gap: 6px;
-}
-
-.settings-form input,
-.settings-form select,
-.key-input {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 0;
-  color: var(--ink);
-  height: 44px;
-  min-width: 0;
-  padding: 0 12px;
-  width: 100%;
-}
-
-.key-input {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.key-input input {
-  border: 0;
-  height: 42px;
-  padding: 0;
-}
-
-.key-input:focus-within,
-.settings-form input:focus,
-.settings-form select:focus,
 .composer textarea:focus {
   border-color: var(--accent);
   outline: none;
 }
 
-.save-config-button,
 .send-button {
   background: var(--accent);
   border-color: var(--accent);
   color: #ffffff;
 }
 
-.save-config-button:disabled,
 .send-button:disabled {
   background: var(--line);
   border-color: var(--line);
   color: var(--helper);
   cursor: not-allowed;
-}
-
-.config-state {
-  gap: 8px;
-  min-width: 0;
-}
-
-.config-state span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.config-state.ready {
-  color: var(--success);
-}
-
-.config-state.empty {
-  color: var(--warn);
 }
 
 .workspace {

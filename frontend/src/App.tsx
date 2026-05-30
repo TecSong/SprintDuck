@@ -3,24 +3,19 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   Building2,
-  CheckCircle2,
   ClipboardList,
   Download,
   FilePenLine,
   FileText,
   Gauge,
-  KeyRound,
   MessageSquareText,
-  Save,
   Send,
-  Settings,
   ShieldCheck,
   Upload,
-  Workflow,
-  X
+  Workflow
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { createSession, getLLMConfig, sendMessage, updateLLMConfig } from "./api";
+import { createSession, getLLMConfig, sendMessage } from "./api";
 import { ChatLine, LLMConfigResponse, LLMProviderConfig, SprintReport, StreamEvent } from "./types";
 
 type PrivacyModeId = "local" | "redacted" | "full";
@@ -67,13 +62,6 @@ export function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [config, setConfig] = useState<LLMConfigResponse | null>(null);
-  const [selectedProviderId, setSelectedProviderId] = useState("wanjie_ark");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configMessage, setConfigMessage] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [report, setReport] = useState<SprintReport | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const [privacyMode] = useState<PrivacyModeId>("redacted");
@@ -90,33 +78,22 @@ export function App() {
         setLines([{ id: crypto.randomUUID(), role: "status", text: error.message }]);
       });
 
-    getLLMConfig()
-      .then((nextConfig) => syncConfigForm(nextConfig, nextConfig.active_provider))
-      .catch((error: Error) => setConfigMessage(error.message));
+    getLLMConfig().then(setConfig).catch(() => setConfig(null));
   }, []);
 
   const canSend = useMemo(() => Boolean(sessionId && !pending && (draft.trim() || files.length)), [draft, files, pending, sessionId]);
-  const selectedProvider = useMemo(
-    () => config?.providers.find((provider) => provider.id === selectedProviderId) ?? null,
-    [config, selectedProviderId]
-  );
-  const providerConfigured = Boolean(selectedProvider?.configured);
-  const egressSummary = privacyEgressSummary(privacyMode, selectedProvider, providerConfigured);
-
-  const syncConfigForm = (nextConfig: LLMConfigResponse, providerId: string) => {
-    const provider = nextConfig.providers.find((item) => item.id === providerId) ?? nextConfig.providers[0];
-    setConfig(nextConfig);
-    setSelectedProviderId(provider?.id ?? "wanjie_ark");
-    setModel(provider?.model ?? "");
-    setBaseUrl(provider?.base_url ?? "");
-    setApiKey("");
-  };
+  const activeProvider = useMemo(() => {
+    if (!config) return null;
+    return config.providers.find((provider) => provider.id === config.active_provider) ?? null;
+  }, [config]);
+  const providerConfigured = Boolean(activeProvider?.configured);
+  const egressSummary = privacyEgressSummary(privacyMode, activeProvider, providerConfigured);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!sessionId || !canSend) return;
     if (privacyMode === "local" && providerConfigured) {
-      appendLine("status", "纯本地模式已阻止发送：当前模型服务商已配置。请清空模型配置，或切换到脱敏外发/完整外发。");
+      appendLine("status", "纯本地模式已阻止发送：当前模型服务商已配置。请切换到脱敏外发或完整外发。");
       return;
     }
     if (privacyMode === "redacted" && files.length) {
@@ -145,32 +122,6 @@ export function App() {
       ]);
     } finally {
       setPending(false);
-    }
-  };
-
-  const handleProviderChange = (providerId: string) => {
-    if (!config) return;
-    syncConfigForm(config, providerId);
-    setConfigMessage("");
-  };
-
-  const handleSaveConfig = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSavingConfig(true);
-    setConfigMessage("");
-    try {
-      const nextConfig = await updateLLMConfig({
-        provider: selectedProviderId,
-        api_key: apiKey,
-        model,
-        base_url: baseUrl
-      });
-      syncConfigForm(nextConfig, selectedProviderId);
-      setConfigMessage("已保存到本地 .env");
-    } catch (error) {
-      setConfigMessage(error instanceof Error ? error.message : "模型配置保存失败");
-    } finally {
-      setSavingConfig(false);
     }
   };
 
@@ -235,78 +186,6 @@ export function App() {
             <ShieldCheck aria-hidden="true" size={16} />
             <span>{egressSummary.short}</span>
           </div>
-          <div className="settings-menu">
-            <button
-              aria-expanded={settingsOpen}
-              aria-label="模型配置"
-              className={`settings-trigger ${providerConfigured ? "ready" : "needs-config"}`}
-              title="模型配置"
-              type="button"
-              onClick={() => setSettingsOpen((open) => !open)}
-            >
-              <Settings aria-hidden="true" size={19} />
-            </button>
-            {settingsOpen ? (
-              <section className="settings-popover" aria-label="Model configuration">
-                <header className="settings-title">
-                  <div>
-                    <strong>模型配置</strong>
-                    <span>{selectedProvider ? providerStatusText(selectedProvider) : "读取中"}</span>
-                  </div>
-                  <button
-                    aria-label="关闭模型配置"
-                    className="close-settings-button"
-                    title="关闭"
-                    type="button"
-                    onClick={() => setSettingsOpen(false)}
-                  >
-                    <X aria-hidden="true" size={17} />
-                  </button>
-                </header>
-                <form className="settings-form" onSubmit={handleSaveConfig}>
-                  <label>
-                    <span>服务商</span>
-                    <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)}>
-                      {config?.providers.map((provider) => (
-                        <option key={provider.id} value={provider.id}>
-                          {provider.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>API Key</span>
-                    <div className="key-input">
-                      <KeyRound aria-hidden="true" size={16} />
-                      <input
-                        autoComplete="off"
-                        placeholder={providerConfigured ? "保持当前 API key" : "输入 API key"}
-                        type="password"
-                        value={apiKey}
-                        onChange={(event) => setApiKey(event.target.value)}
-                      />
-                    </div>
-                  </label>
-                  <label>
-                    <span>模型</span>
-                    <input value={model} onChange={(event) => setModel(event.target.value)} />
-                  </label>
-                  <label>
-                    <span>Base URL</span>
-                    <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-                  </label>
-                  <button className="save-config-button" disabled={!config || savingConfig} type="submit">
-                    <Save aria-hidden="true" size={16} />
-                    <span>{savingConfig ? "保存中" : "保存"}</span>
-                  </button>
-                </form>
-                <div className={`config-state ${providerConfigured ? "ready" : "empty"}`}>
-                  <CheckCircle2 aria-hidden="true" size={16} />
-                  <span>{configMessage || (selectedProvider?.api_key_env ?? "未读取配置")}</span>
-                </div>
-              </section>
-            ) : null}
-          </div>
         </div>
       </header>
 
@@ -368,32 +247,24 @@ export function App() {
   );
 }
 
-function providerStatusText(provider: LLMProviderConfig) {
-  return provider.configured ? `${provider.name} 已配置 · ${provider.api_key_mask}` : `${provider.name} 未配置`;
-}
-
 function privacyEgressSummary(mode: PrivacyModeId, provider: LLMProviderConfig | null, providerConfigured: boolean) {
   if (mode === "local") {
     return {
-      short: "纯本地模式 · 禁止外部模型",
-      detail: providerConfigured ? "当前已配置模型，发送会被阻止。" : "当前未配置模型，报告仅使用本地确定性逻辑。"
+      short: "纯本地模式 · 禁止外部模型"
     };
   }
   if (!providerConfigured) {
     return {
-      short: "本地会话 · 模型未配置",
-      detail: "当前不会调用外部模型；配置 API Key 后才会启用模型增强。"
+      short: "模型未连接 · 检查主 .env"
     };
   }
   if (mode === "redacted") {
     return {
-      short: `脱敏外发 · ${provider?.name ?? "模型服务商"}`,
-      detail: `点击发送后，会把脱敏后的文本上下文发送给 ${provider?.name ?? "当前模型服务商"}。`
+      short: `脱敏外发 · ${provider?.name ?? "模型服务商"}`
     };
   }
   return {
-    short: `完整外发 · ${provider?.name ?? "模型服务商"}`,
-    detail: `点击发送后，会把完整文本上下文发送给 ${provider?.name ?? "当前模型服务商"}。`
+    short: `完整外发 · ${provider?.name ?? "模型服务商"}`
   };
 }
 

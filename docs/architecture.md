@@ -82,7 +82,6 @@ The final report includes:
 
 - `GET /api/health`
 - `GET /api/llm/config`
-- `PUT /api/llm/config`
 - `POST /api/chat/sessions`
 - `POST /api/chat/sessions/{session_id}/messages`
 
@@ -103,9 +102,9 @@ Supported variables:
 
 - `LLM_PROVIDER`, default `wanjie_ark`
 - DeepSeek: `DEEPSEEK_API_KEY` or `deepseek_api_key`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`
-- 万界方舟: `WANJIE_ARK_API_KEY` or `wjark_api_key` or `WJARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
+- 万界方舟: `wjark_api_key` or `WANJIE_ARK_API_KEY` or `WJARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
 
-The web app's model configuration panel writes these provider values to the local `.env` file. API keys are only returned to the browser as masked status strings.
+Linked Codex worktrees resolve credentials from the main worktree `.env` by default, unless `SPRINTDUCK_ENV_FILE` points to a specific file. The web app only reads masked model status; it does not accept or write API keys. Report generation requires a successful model call and returns an error if the provider is missing, unreachable, or returns invalid JSON.
 
 ## Privacy
 

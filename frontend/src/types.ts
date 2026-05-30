@@ -66,13 +66,6 @@ export interface LLMConfigResponse {
   providers: LLMProviderConfig[];
 }
 
-export interface UpdateLLMConfigPayload {
-  provider: string;
-  api_key?: string;
-  model?: string;
-  base_url?: string;
-}
-
 export interface StreamEvent {
   event: "status" | "assistant_delta" | "state" | "report" | "error" | "done";
   data: Record<string, unknown>;

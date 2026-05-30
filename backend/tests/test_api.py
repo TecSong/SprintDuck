@@ -7,15 +7,34 @@ import httpx
 import pytest
 
 from app.main import agent, app
-from app.providers import FakeLLMProvider
+from app import providers
 
 ROOT = Path(__file__).resolve().parents[2]
 
+
+class StubLLMProvider:
+    async def generate_json(self, system: str, user: str) -> dict[str, object]:
+        payload = json.loads(user)
+        if payload.get("draft_summary"):
+            return {"summary": f"大模型生成：{payload['draft_summary']}"}
+        return {
+            "summary": "大模型基于简历和 JD 生成的测试总结。",
+            "interview_questions": [
+                {
+                    "question": f"请说明第 {index} 个关键经历。",
+                    "why_it_matters": "验证岗位关键要求。",
+                    "linked_gap": "岗位匹配证据",
+                }
+                for index in range(1, 6)
+            ],
+        }
+
+
 @pytest.fixture(autouse=True)
 def reset_agent_provider():
-    agent.provider = FakeLLMProvider()
+    agent.provider = StubLLMProvider()
     yield
-    agent.provider = FakeLLMProvider()
+    agent.provider = StubLLMProvider()
 
 
 
@@ -287,48 +306,50 @@ async def test_chat_api_warns_when_active_provider_has_no_api_key(tmp_path, monk
 
     events = parse_sse(response.text)
     warning = next(data for event, data in events if event == "status")
-    assert "右上角齿轮" in warning["message"]
+    assert "主 worktree 的 .env" in warning["message"]
 
 
-async def test_llm_config_api_writes_wanjie_ark_env_without_returning_secret(tmp_path, monkeypatch):
+async def test_llm_config_api_does_not_accept_browser_writes(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     monkeypatch.setenv("SPRINTDUCK_ENV_FILE", str(env_file))
-    for key in (
-        "LLM_PROVIDER",
-        "WANJIE_ARK_API_KEY",
-        "WANJIE_ARK_MODEL",
-        "WANJIE_ARK_BASE_URL",
-        "wjark_api_key",
-        "WJARK_API_KEY",
-    ):
+    for key in ("LLM_PROVIDER", "WANJIE_ARK_API_KEY", "wjark_api_key", "WJARK_API_KEY"):
         monkeypatch.delenv(key, raising=False)
 
-    secret = "test-wanjie-ark-secret"
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.put(
             "/api/llm/config",
             json={
                 "provider": "wanjie_ark",
-                "api_key": secret,
+                "api_key": "test-wanjie-ark-secret",
                 "model": "glm-5.1",
                 "base_url": "https://maas-openapi.wanjiedata.com/api",
             },
         )
-        assert response.status_code == 200
+        assert response.status_code == 405
+    assert not env_file.exists()
 
-        data = response.json()
-        payload = json.dumps(data, ensure_ascii=False)
-        provider = next(item for item in data["providers"] if item["id"] == "wanjie_ark")
-        assert data["active_provider"] == "wanjie_ark"
-        assert provider["configured"] is True
-        assert provider["model"] == "glm-5.1"
-        assert provider["base_url"] == "https://maas-openapi.wanjiedata.com/api"
-        assert secret not in payload
 
-    env_text = env_file.read_text()
-    assert "LLM_PROVIDER=wanjie_ark" in env_text
-    assert f"WANJIE_ARK_API_KEY={secret}" in env_text
+async def test_llm_config_uses_main_worktree_env_for_linked_worktree(tmp_path, monkeypatch):
+    main_root = tmp_path / "SprintDuckAgent"
+    linked_root = tmp_path / "linked" / "SprintDuckAgent"
+    git_dir = main_root / ".git" / "worktrees" / "linked"
+    git_dir.mkdir(parents=True)
+    linked_root.mkdir(parents=True)
+    (linked_root / ".git").write_text(f"gitdir: {git_dir}\n")
+    (main_root / ".env").write_text("wjark_api_key=main-worktree-secret\n")
+
+    monkeypatch.setattr(providers, "REPO_ROOT", linked_root)
+    monkeypatch.delenv("SPRINTDUCK_ENV_FILE", raising=False)
+    for key in ("LLM_PROVIDER", "WANJIE_ARK_API_KEY", "wjark_api_key", "WJARK_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+    data = providers.llm_config_payload()
+    payload = json.dumps(data, ensure_ascii=False)
+    provider = next(item for item in data["providers"] if item["id"] == "wanjie_ark")
+    assert data["active_provider"] == "wanjie_ark"
+    assert provider["configured"] is True
+    assert "main-worktree-secret" not in payload
 
 
 async def test_llm_config_api_detects_lowercase_wjark_api_key(tmp_path, monkeypatch):
