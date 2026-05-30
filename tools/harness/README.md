@@ -1,12 +1,11 @@
-# Harness Extension Point
+# External Harness Assets
 
-This directory is reserved for future external agent tools. Phase 1 keeps tool implementations in `backend/app/harness.py` so they are testable without external processes.
+Runtime harness code lives under `backend/app/agent/harness/` because it is part of the backend agent, not a top-level developer utility.
 
-Future tools should expose:
+Use this top-level directory only for future external harness assets, such as connector fixtures, benchmark cases, or scripts that are not imported by the backend runtime.
 
-- name
-- description
-- input schema
-- deterministic output contract
-- privacy notes for resume/JD handling
+Backend harness modules are organized as:
 
+- `backend/app/agent/harness/runtime.py`: intent routing, plan construction, skill dispatch, and summary assembly.
+- `backend/app/agent/harness/tools/`: deterministic callable tools with input/output contracts.
+- `backend/app/agent/harness/skills/`: higher-level workflows that compose tools.

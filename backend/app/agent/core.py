@@ -6,9 +6,9 @@ import re
 from dataclasses import dataclass
 from typing import AsyncIterator
 
-from .harness import ToolRegistry, default_registry
-from .markdown import render_report_markdown
-from .models import (
+from .harness import HarnessRun, IntentAnalysis, JobSearchHarness, ToolRegistry, default_registry
+from ..markdown import render_report_markdown
+from ..models import (
     ChatMessage,
     EvidenceItem,
     GapItem,
@@ -20,8 +20,8 @@ from .models import (
     SprintReport,
     SseEvent,
 )
-from .providers import LLMProvider
-from .role_presets import Criterion, infer_role, rubric_for
+from ..providers import LLMProvider
+from ..role_presets import Criterion, infer_role, rubric_for
 
 
 MISSING_LABELS = {
@@ -52,6 +52,7 @@ class SprintDuckAgent:
     def __init__(self, provider: LLMProvider, registry: ToolRegistry | None = None) -> None:
         self.provider = provider
         self.registry = registry or default_registry()
+        self.job_harness = JobSearchHarness(self.registry)
 
     def initial_missing(self) -> list[str]:
         return list(MISSING_LABELS.values())
@@ -63,6 +64,32 @@ class SprintDuckAgent:
 
         yield SseEvent(event="status", data={"message": "已收到信息，正在检查上下文完整度。"})
         await asyncio.sleep(0)
+
+        job_intent = self.job_harness.analyze_intent(text, self._job_context(session))
+        if job_intent:
+            yield SseEvent(
+                event="status",
+                data={"message": "已识别求职任务，正在准备本地 harness plan。"},
+            )
+            if job_intent.missing_context:
+                session.followup_count += 1
+                session.status = "collecting_context"
+                reply = self.job_harness.followup_for(job_intent)
+                session.messages.append(ChatMessage(role="assistant", content=reply))
+                state = self._state_payload(session, [])
+                state["intent"] = _intent_payload(job_intent)
+                yield SseEvent(event="assistant_delta", data={"text": reply})
+                yield SseEvent(event="state", data=state)
+                yield SseEvent(event="done", data={"status": session.status})
+                return
+
+            harness_run = await self.job_harness.run(job_intent, self._job_context(session))
+            session.status = "report_ready"
+            session.messages.append(ChatMessage(role="assistant", content=harness_run.summary))
+            yield SseEvent(event="assistant_delta", data={"text": harness_run.summary})
+            yield SseEvent(event="state", data=self._harness_state_payload(session, harness_run))
+            yield SseEvent(event="done", data={"status": session.status})
+            return
 
         quality = self._quality(session)
         if quality.missing and session.followup_count < 2:
@@ -101,6 +128,14 @@ class SprintDuckAgent:
         yield SseEvent(event="report", data=report.model_dump(mode="json"))
         yield SseEvent(event="state", data=self._state_payload(session, []))
         yield SseEvent(event="done", data={"status": session.status})
+
+    def _job_context(self, session: SessionState) -> dict[str, object]:
+        return {
+            "resume_text": session.resume_text,
+            "jd_text": session.jd_text,
+            "constraints_text": session.constraints_text,
+            "role": session.role.value if session.role else None,
+        }
 
     def _ingest_text(self, session: SessionState, text: str) -> None:
         role = _extract_role_confirmation(text, session.status)
@@ -166,6 +201,24 @@ class SprintDuckAgent:
             "role_confidence": session.role_confidence,
             "followup_count": session.followup_count,
         }
+
+    def _harness_state_payload(self, session: SessionState, run: HarnessRun) -> dict[str, object]:
+        state = self._state_payload(session, [])
+        state["intent"] = _intent_payload(run.intent)
+        state["plan"] = [
+            {
+                "id": step.id,
+                "purpose": step.purpose,
+                "tool": step.tool_name,
+                "skill": step.skill_name,
+                "risk_level": step.risk_level,
+                "requires_consent": step.requires_consent,
+            }
+            for step in run.plan
+        ]
+        state["tool_results"] = run.tool_results
+        state["artifact"] = run.artifact
+        return state
 
     async def _generate_report(self, session: SessionState, low_confidence: bool) -> SprintReport:
         role = session.role or RolePreset.GENERIC
@@ -273,6 +326,17 @@ def _append(current: str, addition: str) -> str:
     if not addition:
         return current
     return f"{current}\n\n{addition}".strip() if current else addition
+
+
+def _intent_payload(intent: IntentAnalysis) -> dict[str, object]:
+    return {
+        "primary_intent": intent.primary_intent,
+        "secondary_intents": intent.secondary_intents,
+        "required_context": intent.required_context,
+        "missing_context": intent.missing_context,
+        "risk_level": intent.risk_level,
+        "rationale": intent.rationale,
+    }
 
 
 def _extract_labeled_sections(text: str) -> dict[str, str]:

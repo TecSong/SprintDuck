@@ -54,14 +54,53 @@ async def run_case(client: httpx.AsyncClient, case: dict[str, Any]) -> dict[str,
     return final_report
 
 
+async def run_harness_case(client: httpx.AsyncClient, case: dict[str, Any]) -> dict[str, Any]:
+    created = await client.post("/api/chat/sessions")
+    created.raise_for_status()
+    session_id = created.json()["session_id"]
+    final_state: dict[str, Any] | None = None
+    assistant_text = ""
+
+    for message in case["messages"]:
+        response = await client.post(f"/api/chat/sessions/{session_id}/messages", data={"message": message})
+        response.raise_for_status()
+        for event in parse_sse(response.text):
+            if event["event"] == "assistant_delta":
+                assistant_text += str(event["data"].get("text") or "")
+            if event["event"] == "state" and "intent" in event["data"]:
+                final_state = event["data"]
+
+    if not final_state:
+        raise AssertionError(f"{case['name']} did not produce a harness state")
+
+    intent = final_state["intent"]
+    assert intent["primary_intent"] == case["expected_primary_intent"]
+    assert intent["secondary_intents"] == case["expected_secondary_intents"]
+    assert [step["tool"] for step in final_state["plan"]] == case["expected_tools"]
+    assert [result["tool"] for result in final_state["tool_results"]] == case["expected_tools"]
+    assert final_state["artifact"]["fit"]["priority"] in {"建议投递", "谨慎投递", "低优先级"}
+    assert 0 <= final_state["artifact"]["fit"]["score"] <= 100
+    assert "意图分析" in assistant_text
+    assert "推理执行" in assistant_text
+    assert "不会自动发送或投递" in assistant_text
+    return final_state
+
+
 async def main() -> None:
     load_dotenv(ROOT / ".env")
     cases = json.loads((ROOT / "samples" / "real_conversations.json").read_text())
+    harness_cases = json.loads((ROOT / "samples" / "harness_real_cases.json").read_text())
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         for case in cases:
             report = await run_case(client, case)
             print(f"{case['name']}: {report['role']} {report['readiness_score']} {len(report['sprint_plan'])}d")
+        for case in harness_cases:
+            state = await run_harness_case(client, case)
+            print(
+                f"{case['name']}: "
+                f"{state['intent']['primary_intent']} {state['artifact']['fit']['score']}"
+            )
 
 
 if __name__ == "__main__":
