@@ -32,6 +32,15 @@ MISSING_LABELS = {
     "stage": "当前求职阶段",
 }
 
+SECTION_LABELS = {
+    "resume": r"(?:简历|候选人|candidate|resume)\s*[:：]",
+    "jd": r"(?:jd|岗位|职位|job description)\s*[:：]",
+    "constraints": r"(?:约束|限制|时间|constraints)\s*[:：]",
+}
+
+JD_SIGNAL_TOKENS = ("jd", "岗位", "职位", "职责", "要求", "任职", "job description")
+RESUME_SIGNAL_TOKENS = ("简历", "经历", "项目", "负责", "我是一名", "我有")
+
 
 @dataclass(frozen=True)
 class ContextQuality:
@@ -107,15 +116,18 @@ class SprintDuckAgent:
         if sections.get("constraints"):
             session.constraints_text = _append(session.constraints_text, sections["constraints"])
 
-        lower = text.lower()
-        has_jd_signal = any(token in lower for token in ("jd", "岗位", "职位", "要求", "job description"))
-        has_resume_signal = any(token in lower for token in ("简历", "经历", "项目", "负责", "我是一名", "我有"))
+        has_jd_signal = _has_jd_signal(text)
+        has_resume_signal = _has_resume_signal(text)
         has_constraint_signal = _has_deadline(text) or _daily_minutes(text) or _stage(text)
 
         if not sections and has_jd_signal:
             session.jd_text = _append(session.jd_text, text)
         if not sections and (has_resume_signal or not session.resume_text):
             session.resume_text = _append(session.resume_text, text)
+        if sections:
+            for prefix in _unlabeled_prefixes(text):
+                if _has_jd_signal(prefix):
+                    session.jd_text = _append(session.jd_text, prefix)
         if has_constraint_signal:
             session.constraints_text = _append(session.constraints_text, text)
 
@@ -262,21 +274,38 @@ def _append(current: str, addition: str) -> str:
 
 
 def _extract_labeled_sections(text: str) -> dict[str, str]:
-    labels = {
-        "resume": r"(?:简历|候选人|candidate|resume)\s*[:：]",
-        "jd": r"(?:jd|岗位|职位|job description)\s*[:：]",
-        "constraints": r"(?:约束|限制|时间|constraints)\s*[:：]",
-    }
-    matches: list[tuple[str, int, int]] = []
-    for name, pattern in labels.items():
-        for match in re.finditer(pattern, text, flags=re.I):
-            matches.append((name, match.start(), match.end()))
-    matches.sort(key=lambda item: item[1])
+    matches = _section_matches(text)
     sections: dict[str, str] = {}
     for index, (name, _start, end) in enumerate(matches):
         next_start = matches[index + 1][1] if index + 1 < len(matches) else len(text)
         sections[name] = text[end:next_start].strip()
     return {key: value for key, value in sections.items() if value}
+
+
+def _section_matches(text: str) -> list[tuple[str, int, int]]:
+    matches: list[tuple[str, int, int]] = []
+    for name, pattern in SECTION_LABELS.items():
+        for match in re.finditer(pattern, text, flags=re.I):
+            matches.append((name, match.start(), match.end()))
+    matches.sort(key=lambda item: item[1])
+    return matches
+
+
+def _unlabeled_prefixes(text: str) -> list[str]:
+    matches = _section_matches(text)
+    if not matches:
+        return []
+    prefix = text[: matches[0][1]].strip()
+    return [prefix] if prefix else []
+
+
+def _has_jd_signal(text: str) -> bool:
+    lower = text.lower()
+    return any(token in lower for token in JD_SIGNAL_TOKENS)
+
+
+def _has_resume_signal(text: str) -> bool:
+    return any(token in text for token in RESUME_SIGNAL_TOKENS)
 
 
 def _extract_role_confirmation(text: str, status: str) -> RolePreset | None:

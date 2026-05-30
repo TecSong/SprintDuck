@@ -25,6 +25,30 @@ async def test_agent_asks_for_missing_context_before_reporting():
     assert session.followup_count == 1
 
 
+async def test_agent_keeps_unlabeled_jd_when_resume_file_is_merged_after_message():
+    agent = SprintDuckAgent(FakeLLMProvider())
+    session = SessionState(session_id="s1b")
+
+    events = await collect(
+        agent,
+        session,
+        (
+            "岗位职责：负责用户增长活动策划、用户分层运营、社群活跃和转化提升，"
+            "基于数据复盘优化活动效果。任职要求：熟悉 CRM、生命周期运营、跨团队协作，"
+            "有活动策划、用户增长和数据分析经验。\n\n"
+            "简历：我有 3 年用户运营经验，负责公众号、社群和活动复盘。曾策划 3 场线上活动，"
+            "累计报名 1800 人，活动后社群留存约 42%。熟悉内容排期、社群答疑、基础数据复盘。"
+        ),
+    )
+
+    state = next(event.data for event in events if event.event == "state")
+    assistant_reply = "".join(str(event.data["text"]) for event in events if event.event == "assistant_delta")
+    assert "目标岗位 JD" not in state["missing"]
+    assert "目标岗位 JD" not in assistant_reply
+    assert "关键日期" in state["missing"]
+    assert session.jd_text.startswith("岗位职责")
+
+
 async def test_agent_generates_evidence_backed_report_for_engineering_case():
     agent = SprintDuckAgent(FakeLLMProvider())
     session = SessionState(session_id="s2")
@@ -62,4 +86,3 @@ async def test_agent_limits_plan_to_seven_days_for_longer_deadline():
     assert session.report is not None
     assert session.report.role == "product"
     assert len(session.report.sprint_plan) == 7
-
