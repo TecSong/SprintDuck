@@ -38,6 +38,14 @@ class HarnessRun:
     summary: str
 
 
+@dataclass(frozen=True)
+class HarnessProgress:
+    phase: str
+    message: str
+    plan: list[PlanStep] | None = None
+    run: HarnessRun | None = None
+
+
 class JobSearchHarness:
     def __init__(
         self,
@@ -81,30 +89,74 @@ class JobSearchHarness:
         return f"我已识别到任务：{_intent_label(intent)}。还缺少：{missing}。请补充后我再继续执行。"
 
     async def run(self, intent: IntentAnalysis, context: dict[str, Any]) -> HarnessRun:
-        skill_names = ["jd_match_analyst"]
-        if "application_message" in intent.secondary_intents:
-            skill_names.append("application_assistant")
+        final_run: HarnessRun | None = None
+        async for progress in self.run_stream(intent, context):
+            if progress.run:
+                final_run = progress.run
+        if final_run:
+            return final_run
+        return _failed_run(intent, [], [], {}, "Harness 未产生执行结果")
 
+    async def run_stream(self, intent: IntentAnalysis, context: dict[str, Any]):
+        skill_names = self._skill_names_for(intent)
         plan = self._build_plan(skill_names, context)
+        yield HarnessProgress(
+            phase="plan_generated",
+            message="Plan 生成：" + " -> ".join(f"{step.skill_name}.{step.tool_name}" for step in plan) + "。",
+            plan=plan,
+        )
         tool_results: list[dict[str, Any]] = []
         artifact: dict[str, Any] = {}
         for skill_name in skill_names:
             skill = self.skills.get(skill_name)
             if not skill:
-                return _failed_run(intent, plan, tool_results, artifact, f"Skill not found: {skill_name}")
+                yield HarnessProgress(
+                    phase="completed",
+                    message=f"计划执行：{skill_name} 不存在，任务中止。",
+                    run=_failed_run(intent, plan, tool_results, artifact, f"Skill not found: {skill_name}"),
+                )
+                return
+            yield HarnessProgress(
+                phase="skill_started",
+                message=(
+                    f"计划执行：开始 {skill_name}，调用 "
+                    + "、".join(skill.required_tools(context))
+                    + "。"
+                ),
+            )
             result = await skill.run(context, self.tools, artifact)
             tool_results.extend(result.tool_results)
             if not result.ok:
-                return _failed_run(intent, plan, tool_results, artifact, result.error or f"{skill_name} 执行失败")
+                yield HarnessProgress(
+                    phase="completed",
+                    message=f"计划执行：{skill_name} 失败，正在返回可审计结果。",
+                    run=_failed_run(intent, plan, tool_results, artifact, result.error or f"{skill_name} 执行失败"),
+                )
+                return
             artifact.update(result.artifact)
+            yield HarnessProgress(
+                phase="skill_completed",
+                message=(
+                    f"计划执行：完成 {skill_name}，得到 "
+                    + "、".join(item["tool"] for item in result.tool_results)
+                    + " 结果。"
+                ),
+            )
 
-        return HarnessRun(
+        run = HarnessRun(
             intent=intent,
             plan=plan,
             tool_results=tool_results,
             artifact=artifact,
             summary=_render_summary(intent, plan, artifact),
         )
+        yield HarnessProgress(phase="completed", message="计划执行：全部步骤完成，正在生成最终回答。", run=run)
+
+    def _skill_names_for(self, intent: IntentAnalysis) -> list[str]:
+        skill_names = ["jd_match_analyst"]
+        if "application_message" in intent.secondary_intents:
+            skill_names.append("application_assistant")
+        return skill_names
 
     def _build_plan(self, skill_names: list[str], context: dict[str, Any]) -> list[PlanStep]:
         plan: list[PlanStep] = []

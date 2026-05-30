@@ -1,11 +1,12 @@
 from .registry import AgentTool, ToolRegistry, ToolResult, ToolSpec
-from .runtime import HarnessRun, IntentAnalysis, JobSearchHarness, PlanStep
+from .runtime import HarnessProgress, HarnessRun, IntentAnalysis, JobSearchHarness, PlanStep
 from .skills import AgentSkill, SkillRegistry, SkillResult, default_skill_registry
 from .tools import default_registry
 
 __all__ = [
     "AgentSkill",
     "AgentTool",
+    "HarnessProgress",
     "HarnessRun",
     "IntentAnalysis",
     "JobSearchHarness",

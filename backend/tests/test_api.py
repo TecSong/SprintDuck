@@ -58,6 +58,44 @@ async def test_chat_api_streams_state_and_report():
         assert "## 高频追问" in report["markdown"]
 
 
+async def test_chat_api_streams_harness_progress_before_final_answer():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/chat/sessions")
+        assert created.status_code == 200
+        session_id = created.json()["session_id"]
+
+        response = await client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            data={
+                "message": (
+                    "帮我判断这个岗位值不值得投，并写一段 Boss 开场白。\n\n"
+                    "简历：我是一名 4 年经验的全栈工程师，主要使用 TypeScript、React、Node.js 和 PostgreSQL。"
+                    "负责过 B2B SaaS 权限系统、报表模块和内部自动化平台。最近项目中我把页面加载时间从 4.2s 优化到 1.8s，"
+                    "并推动前端组件库重构。我有基础 Docker 使用经验，但没有主导过 Kubernetes 或大型系统设计评审。\n\n"
+                    "JD：岗位：Senior Fullstack Engineer。要求：5年以上经验，熟悉 React、Node.js、PostgreSQL，"
+                    "能够设计可扩展后端服务。需要性能优化经验、跨团队沟通能力、英文技术文档阅读能力。"
+                    "加分项：Kubernetes、系统设计、带领小团队。"
+                )
+            },
+        )
+        assert response.status_code == 200
+
+    events = parse_sse(response.text)
+    names = [event for event, _data in events]
+    status_texts = [str(data["message"]) for event, data in events if event == "status"]
+    first_assistant_index = names.index("assistant_delta")
+
+    assert any(text.startswith("意图分析：jd_match + application_message") for text in status_texts)
+    assert any(text.startswith("Plan 生成：jd_match_analyst.jd.parse") for text in status_texts)
+    assert any(text.startswith("计划执行：开始 jd_match_analyst") for text in status_texts)
+    assert max(
+        index
+        for index, (event, data) in enumerate(events)
+        if event == "status" and str(data["message"]).startswith(("意图分析：", "Plan 生成：", "计划执行："))
+    ) < first_assistant_index
+
+
 async def test_chat_api_keeps_message_jd_when_resume_file_uploaded():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

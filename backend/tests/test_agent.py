@@ -115,6 +115,7 @@ async def test_agent_runs_minimal_harness_for_jd_match_and_message():
 
     state = next(event.data for event in events if event.event == "state")
     assistant_reply = "".join(str(event.data["text"]) for event in events if event.event == "assistant_delta")
+    status_texts = [str(event.data["message"]) for event in events if event.event == "status"]
     assert state["intent"]["primary_intent"] == "jd_match"
     assert state["intent"]["secondary_intents"] == ["application_message"]
     assert [step["skill"] for step in state["plan"]] == [
@@ -126,10 +127,19 @@ async def test_agent_runs_minimal_harness_for_jd_match_and_message():
     assert [step["tool"] for step in state["plan"]] == ["jd.parse", "evidence.extract", "fit.score", "message.compose"]
     assert [result["tool"] for result in state["tool_results"]] == ["jd.parse", "evidence.extract", "fit.score", "message.compose"]
     assert state["artifact"]["fit"]["priority"] in {"建议投递", "谨慎投递", "低优先级"}
+    assert any(text.startswith("意图分析：jd_match + application_message") for text in status_texts)
+    assert any(text.startswith("Plan 生成：jd_match_analyst.jd.parse") for text in status_texts)
+    assert any(text.startswith("计划执行：开始 jd_match_analyst") for text in status_texts)
     assert "意图分析" in assistant_reply
     assert "推理执行" in assistant_reply
     assert "开场白草稿" in assistant_reply
     assert "不会自动发送或投递" in assistant_reply
+    first_assistant_index = names.index("assistant_delta")
+    assert max(
+        index
+        for index, event in enumerate(events)
+        if event.event == "status" and str(event.data["message"]).startswith(("意图分析：", "Plan 生成：", "计划执行："))
+    ) < first_assistant_index
 
 
 async def test_agent_harness_asks_for_missing_required_context():

@@ -71,6 +71,10 @@ class SprintDuckAgent:
                 event="status",
                 data={"message": "已识别求职任务，正在准备本地 harness plan。"},
             )
+            yield SseEvent(
+                event="status",
+                data={"message": f"意图分析：{_intent_label(job_intent)}。{job_intent.rationale}。"},
+            )
             if job_intent.missing_context:
                 session.followup_count += 1
                 session.status = "collecting_context"
@@ -83,7 +87,14 @@ class SprintDuckAgent:
                 yield SseEvent(event="done", data={"status": session.status})
                 return
 
-            harness_run = await self.job_harness.run(job_intent, self._job_context(session))
+            harness_run: HarnessRun | None = None
+            async for progress in self.job_harness.run_stream(job_intent, self._job_context(session)):
+                if progress.message:
+                    yield SseEvent(event="status", data={"message": progress.message})
+                if progress.run:
+                    harness_run = progress.run
+            if not harness_run:
+                raise RuntimeError("Harness did not produce a result")
             session.status = "report_ready"
             session.messages.append(ChatMessage(role="assistant", content=harness_run.summary))
             yield SseEvent(event="assistant_delta", data={"text": harness_run.summary})
@@ -337,6 +348,11 @@ def _intent_payload(intent: IntentAnalysis) -> dict[str, object]:
         "risk_level": intent.risk_level,
         "rationale": intent.rationale,
     }
+
+
+def _intent_label(intent: IntentAnalysis) -> str:
+    labels = [intent.primary_intent, *intent.secondary_intents]
+    return " + ".join(labels)
 
 
 def _extract_labeled_sections(text: str) -> dict[str, str]:
