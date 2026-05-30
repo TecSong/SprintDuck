@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+node_modules/
+frontend/dist/
+frontend/node_modules/
+*.log
+

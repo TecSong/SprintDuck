@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+from app.agent import SprintDuckAgent
+from app.models import SessionState
+from app.providers import FakeLLMProvider
+
+
+async def collect(agent: SprintDuckAgent, session: SessionState, text: str):
+    return [event async for event in agent.handle_user_message(session, text)]
+
+
+def event_names(events):
+    return [event.event for event in events]
+
+
+async def test_agent_asks_for_missing_context_before_reporting():
+    agent = SprintDuckAgent(FakeLLMProvider())
+    session = SessionState(session_id="s1")
+
+    events = await collect(agent, session, "简历：我做过 React 和 Node.js 项目。")
+
+    assert "assistant_delta" in event_names(events)
+    assert session.status == "collecting_context"
+    assert session.report is None
+    assert session.followup_count == 1
+
+
+async def test_agent_generates_evidence_backed_report_for_engineering_case():
+    agent = SprintDuckAgent(FakeLLMProvider())
+    session = SessionState(session_id="s2")
+
+    await collect(
+        agent,
+        session,
+        "简历：我是一名 4 年经验的全栈工程师，主要使用 TypeScript、React、Node.js 和 PostgreSQL。负责过 B2B SaaS 的权限系统和报表模块。最近项目中我把页面加载时间从 4.2s 优化到 1.8s，并推动组件库重构。",
+    )
+    await collect(
+        agent,
+        session,
+        "JD：岗位：Senior Fullstack Engineer。要求：5年以上经验，熟悉 React、Node.js、PostgreSQL，能够设计可扩展后端服务。需要性能优化经验、跨团队沟通能力。加分项：Kubernetes、系统设计、带领小团队。",
+    )
+    events = await collect(agent, session, "约束：面试日期是 5 天后，每天可以投入 90 分钟，目前阶段是已经拿到一面邀请。")
+
+    assert "report" in event_names(events)
+    assert session.report is not None
+    assert session.report.role == "engineering"
+    assert 0 <= session.report.readiness_score <= 100
+    assert len(session.report.top_gaps) >= 3
+    assert len(session.report.sprint_plan) == 5
+    assert len(session.report.interview_questions) >= 5
+    assert "未发现证据" in session.report.markdown or "证据:" in session.report.markdown
+
+
+async def test_agent_limits_plan_to_seven_days_for_longer_deadline():
+    agent = SprintDuckAgent(FakeLLMProvider())
+    session = SessionState(session_id="s3")
+
+    await collect(agent, session, "简历：我做过 3 年 B2B 产品经理，负责客户后台、权限配置和数据看板。熟悉用户访谈、PRD、需求优先级排序和跨部门推进。上线数据看板模块，使运营团队每周手动统计时间减少约 6 小时。")
+    await collect(agent, session, "JD：岗位：Product Manager - Growth。要求：负责增长漏斗分析、A/B 测试、用户分层、商业化转化策略。需要能写 PRD，与设计、研发、运营协作，并用数据评估上线效果。")
+    await collect(agent, session, "约束：目标投递日期是 9 天后，每天可以投入 60 分钟，目前阶段是准备定制简历和作品集。")
+
+    assert session.report is not None
+    assert session.report.role == "product"
+    assert len(session.report.sprint_plan) == 7
+
