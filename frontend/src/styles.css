@@ -53,23 +53,67 @@ textarea {
   font-size: 13px;
 }
 
-.settings-panel {
+.topbar-actions {
   align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.settings-menu {
+  position: relative;
+}
+
+.settings-trigger,
+.close-settings-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.settings-trigger.ready {
+  color: #286046;
+}
+
+.settings-trigger.needs-config {
+  color: #725317;
+}
+
+.settings-trigger:focus,
+.settings-trigger:hover,
+.close-settings-button:focus,
+.close-settings-button:hover {
+  border-color: #3f7f68;
+  box-shadow: 0 0 0 3px rgba(63, 127, 104, 0.15);
+  outline: none;
+}
+
+.settings-popover {
   background: #ffffff;
   border: 1px solid #dbe2ea;
   border-radius: 8px;
+  box-shadow: 0 18px 45px rgba(28, 43, 58, 0.18);
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(190px, 0.8fr) minmax(520px, 2fr) minmax(160px, 0.6fr);
-  margin: 0 auto 16px;
-  max-width: 1320px;
   padding: 14px;
+  position: absolute;
+  right: 0;
+  top: 48px;
+  width: min(420px, calc(100vw - 32px));
+  z-index: 10;
 }
 
 .settings-title {
   align-items: center;
   display: flex;
   gap: 10px;
+  justify-content: space-between;
 }
 
 .settings-title strong,
@@ -84,10 +128,8 @@ textarea {
 }
 
 .settings-form {
-  align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.1fr) minmax(150px, 0.9fr) minmax(220px, 1.4fr) auto;
 }
 
 .settings-form label {
@@ -157,6 +199,7 @@ textarea {
   height: 40px;
   justify-content: center;
   padding: 0 14px;
+  width: 100%;
 }
 
 .save-config-button:disabled {
@@ -169,7 +212,6 @@ textarea {
   display: flex;
   font-size: 12px;
   gap: 7px;
-  justify-self: end;
   min-width: 0;
 }
 
@@ -496,38 +538,18 @@ textarea {
   margin-top: 4px;
 }
 
-@media (max-width: 1180px) {
-  .settings-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .save-config-button {
-    width: 100%;
-  }
-
-  .config-state {
-    justify-self: start;
-  }
-}
-
 @media (max-width: 920px) {
   .shell {
     padding: 12px;
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
     gap: 10px;
   }
 
-  .settings-panel,
-  .settings-form {
-    grid-template-columns: 1fr;
+  .privacy-note span {
+    display: none;
   }
 
   .workspace {

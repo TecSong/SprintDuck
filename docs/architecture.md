@@ -101,7 +101,7 @@ Supported variables:
 
 - `LLM_PROVIDER`, default `deepseek`
 - DeepSeek: `DEEPSEEK_API_KEY` or `deepseek_api_key`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`
-- 万界方舟: `WANJIE_ARK_API_KEY` or `WJARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
+- 万界方舟: `WANJIE_ARK_API_KEY` or `wjark_api_key` or `WJARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
 
 The web app's model configuration panel writes these provider values to the local `.env` file. API keys are only returned to the browser as masked status strings.
 

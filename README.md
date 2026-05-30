@@ -24,7 +24,7 @@ Select the active provider with `LLM_PROVIDER`:
 - `deepseek`: `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`
 - `wanjie_ark`: `WANJIE_ARK_API_KEY`, `WANJIE_ARK_MODEL`, `WANJIE_ARK_BASE_URL`
 
-`deepseek_api_key` remains supported as a legacy alias for DeepSeek. `WJARK_API_KEY` is supported as an alias for 万界方舟. The 万界方舟 base URL defaults to `https://maas-openapi.wanjiedata.com/api`.
+`deepseek_api_key` remains supported as a legacy alias for DeepSeek. `wjark_api_key` and `WJARK_API_KEY` are supported as aliases for 万界方舟. The 万界方舟 base URL defaults to `https://maas-openapi.wanjiedata.com/api`.
 
 ## Tests
 

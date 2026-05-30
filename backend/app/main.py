@@ -55,10 +55,12 @@ async def update_llm_config(payload: UpdateLLMConfigRequest) -> dict[str, object
 @app.post("/api/chat/sessions", response_model=CreateSessionResponse)
 async def create_session() -> CreateSessionResponse:
     session = store.create()
+    llm_warning = _llm_warning()
+    message = "请发送简历、目标 JD、关键日期、每天可投入时间和当前求职阶段。支持粘贴文本或上传 .txt/.md。"
     return CreateSessionResponse(
         session_id=session.session_id,
         status=session.status,
-        message="请发送简历、目标 JD、关键日期、每天可投入时间和当前求职阶段。支持粘贴文本或上传 .txt/.md。",
+        message=f"{llm_warning}\n\n{message}" if llm_warning else message,
         missing=agent.initial_missing(),
     )
 
@@ -87,6 +89,9 @@ async def post_message(
 
     async def stream() -> AsyncIterator[str]:
         try:
+            llm_warning = _llm_warning()
+            if llm_warning:
+                yield _format_sse(SseEvent(event="status", data={"message": llm_warning}))
             async for event in agent.handle_user_message(session, merged):
                 store.save(session)
                 yield _format_sse(event)
@@ -121,3 +126,14 @@ def _label_for_upload(filename: str) -> str | None:
 
 def _format_sse(event: SseEvent) -> str:
     return f"event: {event.event}\ndata: {json.dumps(event.data, ensure_ascii=False)}\n\n"
+
+
+def _llm_warning() -> str | None:
+    config = llm_config_payload()
+    active = next(
+        (provider for provider in config["providers"] if provider["id"] == config["active_provider"]),
+        None,
+    )
+    if not active or active["configured"]:
+        return None
+    return f"当前 {active['name']} 尚未配置 API Key。请点击右上角齿轮填写 {active['api_key_env']}。"

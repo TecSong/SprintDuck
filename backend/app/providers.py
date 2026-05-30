@@ -32,6 +32,7 @@ class ProviderSpec:
     default_model: str
     default_base_url: str
     chat_completions_path: str
+    supports_response_format: bool = True
     api_key_aliases: tuple[str, ...] = ()
 
 
@@ -53,10 +54,11 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         api_key_env="WANJIE_ARK_API_KEY",
         model_env="WANJIE_ARK_MODEL",
         base_url_env="WANJIE_ARK_BASE_URL",
-        default_model="deepseek-reasoner",
+        default_model="glm-5.1",
         default_base_url="https://maas-openapi.wanjiedata.com/api",
         chat_completions_path="/v1/chat/completions",
-        api_key_aliases=("WJARK_API_KEY",),
+        supports_response_format=False,
+        api_key_aliases=("wjark_api_key", "WJARK_API_KEY"),
     ),
 )
 PROVIDER_SPEC_BY_ID = {spec.id: spec for spec in PROVIDER_SPECS}
@@ -87,8 +89,9 @@ class OpenAICompatibleProvider:
                 {"role": "user", "content": user},
             ],
             "temperature": 0.2,
-            "response_format": {"type": "json_object"},
         }
+        if self.spec.supports_response_format:
+            payload["response_format"] = {"type": "json_object"}
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=45) as client:
             response = await client.post(

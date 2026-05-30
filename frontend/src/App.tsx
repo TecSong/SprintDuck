@@ -8,7 +8,8 @@ import {
   Send,
   Settings,
   ShieldCheck,
-  Upload
+  Upload,
+  X
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createSession, getLLMConfig, sendMessage, updateLLMConfig } from "./api";
@@ -27,6 +28,7 @@ export function App() {
   const [baseUrl, setBaseUrl] = useState("");
   const [savingConfig, setSavingConfig] = useState(false);
   const [configMessage, setConfigMessage] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [report, setReport] = useState<SprintReport | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -159,62 +161,85 @@ export function App() {
             <span>开源求职冲刺教练</span>
           </div>
         </div>
-        <div className="privacy-note">
-          <ShieldCheck aria-hidden="true" size={18} />
-          <span>本地会话 · 默认不持久化</span>
-        </div>
-      </header>
-
-      <section className="settings-panel" aria-label="Model configuration">
-        <div className="settings-title">
-          <Settings aria-hidden="true" size={19} />
-          <div>
-            <strong>模型配置</strong>
-            <span>{selectedProvider ? providerStatusText(selectedProvider) : "读取中"}</span>
+        <div className="topbar-actions">
+          <div className="privacy-note">
+            <ShieldCheck aria-hidden="true" size={18} />
+            <span>本地会话 · 默认不持久化</span>
+          </div>
+          <div className="settings-menu">
+            <button
+              aria-expanded={settingsOpen}
+              aria-label="模型配置"
+              className={`settings-trigger ${providerConfigured ? "ready" : "needs-config"}`}
+              title="模型配置"
+              type="button"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <Settings aria-hidden="true" size={19} />
+            </button>
+            {settingsOpen ? (
+              <section className="settings-popover" aria-label="Model configuration">
+                <header className="settings-title">
+                  <div>
+                    <strong>模型配置</strong>
+                    <span>{selectedProvider ? providerStatusText(selectedProvider) : "读取中"}</span>
+                  </div>
+                  <button
+                    aria-label="关闭模型配置"
+                    className="close-settings-button"
+                    title="关闭"
+                    type="button"
+                    onClick={() => setSettingsOpen(false)}
+                  >
+                    <X aria-hidden="true" size={17} />
+                  </button>
+                </header>
+                <form className="settings-form" onSubmit={handleSaveConfig}>
+                  <label>
+                    <span>服务商</span>
+                    <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)}>
+                      {config?.providers.map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>API Key</span>
+                    <div className="key-input">
+                      <KeyRound aria-hidden="true" size={16} />
+                      <input
+                        autoComplete="off"
+                        placeholder={providerConfigured ? "保持当前 API key" : "输入 API key"}
+                        type="password"
+                        value={apiKey}
+                        onChange={(event) => setApiKey(event.target.value)}
+                      />
+                    </div>
+                  </label>
+                  <label>
+                    <span>模型</span>
+                    <input value={model} onChange={(event) => setModel(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Base URL</span>
+                    <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
+                  </label>
+                  <button className="save-config-button" disabled={!config || savingConfig} type="submit">
+                    <Save aria-hidden="true" size={16} />
+                    <span>{savingConfig ? "保存中" : "保存"}</span>
+                  </button>
+                </form>
+                <div className={`config-state ${providerConfigured ? "ready" : "empty"}`}>
+                  <CheckCircle2 aria-hidden="true" size={16} />
+                  <span>{configMessage || (selectedProvider?.api_key_env ?? "未读取配置")}</span>
+                </div>
+              </section>
+            ) : null}
           </div>
         </div>
-        <form className="settings-form" onSubmit={handleSaveConfig}>
-          <label>
-            <span>服务商</span>
-            <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)}>
-              {config?.providers.map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>API Key</span>
-            <div className="key-input">
-              <KeyRound aria-hidden="true" size={16} />
-              <input
-                autoComplete="off"
-                placeholder={providerConfigured ? "保持当前 API key" : "输入 API key"}
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-              />
-            </div>
-          </label>
-          <label>
-            <span>模型</span>
-            <input value={model} onChange={(event) => setModel(event.target.value)} />
-          </label>
-          <label>
-            <span>Base URL</span>
-            <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-          </label>
-          <button className="save-config-button" disabled={!config || savingConfig} type="submit">
-            <Save aria-hidden="true" size={16} />
-            <span>{savingConfig ? "保存中" : "保存"}</span>
-          </button>
-        </form>
-        <div className={`config-state ${providerConfigured ? "ready" : "empty"}`}>
-          <CheckCircle2 aria-hidden="true" size={16} />
-          <span>{configMessage || (selectedProvider?.api_key_env ?? "未读取配置")}</span>
-        </div>
-      </section>
+      </header>
 
       <section className="workspace">
         <section className="chat-panel" aria-label="Agent chat">
