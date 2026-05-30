@@ -60,11 +60,13 @@ async def run_harness_case(client: httpx.AsyncClient, case: dict[str, Any]) -> d
     session_id = created.json()["session_id"]
     final_state: dict[str, Any] | None = None
     assistant_text = ""
+    stream_events: list[dict[str, Any]] = []
 
     for message in case["messages"]:
         response = await client.post(f"/api/chat/sessions/{session_id}/messages", data={"message": message})
         response.raise_for_status()
         for event in parse_sse(response.text):
+            stream_events.append(event)
             if event["event"] == "assistant_delta":
                 assistant_text += str(event["data"].get("text") or "")
             if event["event"] == "state" and "intent" in event["data"]:
@@ -80,9 +82,22 @@ async def run_harness_case(client: httpx.AsyncClient, case: dict[str, Any]) -> d
     assert [result["tool"] for result in final_state["tool_results"]] == case["expected_tools"]
     assert final_state["artifact"]["fit"]["priority"] in {"建议投递", "谨慎投递", "低优先级"}
     assert 0 <= final_state["artifact"]["fit"]["score"] <= 100
-    assert "意图分析" in assistant_text
-    assert "推理执行" in assistant_text
-    assert "不会自动发送或投递" in assistant_text
+    progress_indexes = [
+        index
+        for index, event in enumerate(stream_events)
+        if event["event"] == "status"
+        and str(event["data"].get("message") or "").startswith(("意图分析：", "Plan 生成：", "计划执行："))
+    ]
+    assistant_indexes = [index for index, event in enumerate(stream_events) if event["event"] == "assistant_delta"]
+    assert progress_indexes
+    assert assistant_indexes
+    assert max(progress_indexes) < min(assistant_indexes)
+    status_text = "\n".join(str(event["data"].get("message") or "") for event in stream_events if event["event"] == "status")
+    assert "意图分析" in status_text
+    assert "Plan 生成" in status_text
+    assert "计划执行" in status_text
+    assert "已自动投递" not in assistant_text
+    assert "已经投递" not in assistant_text
     return final_state
 
 
